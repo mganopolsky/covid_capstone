@@ -687,14 +687,6 @@ get_testing_data_us <- function()
   df_test_final
 }
 
-#states <- c("Florida", "Alabama")
-#fl_params <- list(Sys.Date() - 30, 15, .5)
-#al_params <- list( Sys.Date() = 60, 12, .3)
-#test_dict <- dict()
-#test_dict[[states[1]]] <- fl_params
-#test_dict[[states[2]]] <- al_params
 
 
-#output_test <- gamma_t( as.Date( Sys.Date()), state = "Florida", params_dict = test_dict)
-
-us <- get_testing_data_us()
+#us <- get_testing_data_us()
