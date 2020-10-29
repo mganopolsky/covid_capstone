@@ -1,12 +1,9 @@
 #add install requirements for packages below
 
-library(futile.logger)
-library(zoo)
-library(sets)
+#library(zoo)
 
 source("params.r")
 source("capstone_utils.R")
-
 
 
 DELPHIDataCreator <- setClass( 
@@ -30,19 +27,19 @@ DELPHIDataCreator <- setClass(
   
 )
 
-validDELPHIDataCreatorObject <- function(object) {
+validDELPHIDataCreatorObject <- function(.Object) {
   
-  if ((testing_data_included & (length(best_params) == 14))  |
-      (!testing_data_included & (length(best_params) == 11)))
+  if ((.Object@testing_data_included & (length(.Object@best_params) == 14))  |
+      (!.Object@testing_data_included & (length(.Object@best_params) == 11)))
     TRUE
   
-  if (testing_data_included) {
-    if (length(best_params) != 14) {
-      paste("Expected 9 best parameters, got ", length(best_params))
+  if (.Object@testing_data_included) {
+    if (length(.Object@best_params) != 14) {
+      paste("Expected 9 best parameters, got ", length(.Object@best_params))
     }
   } else {
-    if (length(best_params) != 11) {
-      paste("Expected 7 best parameters, got ", length(best_params))
+    if (length(.Object@best_params) != 11) {
+      paste("Expected 7 best parameters, got ", length(.Object@best_params))
     }
   }
 }
@@ -71,38 +68,52 @@ setMethod("initialize", "DELPHIDataCreator",
     }
 )
 
-setMethod("create_dataset_parameters", "DELPHIDataCreator",
-          function(.Object, mape, ...) 
+
+setGeneric(name="create_dataset_parameters",
+           def=function(.Object,mape, ...)
+           {
+             standardGeneric("create_dataset_parameters")
+           }
+)
+
+setMethod(f="create_dataset_parameters", signature="DELPHIDataCreator",
+          definition=function(.Object, mape, ...) 
   {
     #Creates the parameters dataset with the results from the optimization and the pre-computed MAPE
     #:param mape: MAPE a float on the last 15 days (or less if less historical days available) for that particular area
     #:return: dataframe with parameters and MAPE
     
-    if (object@testing_data_included)
+    if (.Object@testing_data_included)
       print( "Parameters dataset created without the testing data parameters beta_0, beta_1: code will have to be modified")
     
-    df_parameters = data.frame(
-      Continent:.Object@continent,
-      Country:.Object@country,
-      Province:.Object@province,
-      "Data Start Date":.Object@date_day_since100,
-      MAPE: mape,
-      "Infection Rate": .Object@best_params[1],
-      "Median Day of Action": .Object@best_params[2],
-      "Rate of Action": .Object@best_params[3],
-      "Rate of Death": .Object@best_params[4],
-      "Mortality Rate": .Object@best_params[5],
-      "Rate of Mortality Rate Decay": .Object@best_params[6],
-      "Internal Parameter 1": .Object@best_params[7],
-      "Internal Parameter 2": .Object@best_params[8],
-      "Jump Magnitude": .Object@best_params[9],
-      "Jump Time": .Object@best_params[10],
-      "Jump Decay": .Object@best_params[11]
+    df_parameters <- data.frame(
+      Continent = .Object@continent,
+      Country = .Object@country,
+      Province = .Object@province,
+      "Data Start Date" = .Object@date_day_since100,
+       MAPE <-  mape,
+      "Infection Rate" =  .Object@best_params[1],
+      "Median Day of Action" =  .Object@best_params[2],
+      "Rate of Action" =  .Object@best_params[3],
+      "Rate of Death" =  .Object@best_params[4],
+      "Mortality Rate" =  .Object@best_params[5],
+      "Rate of Mortality Rate Decay" =  .Object@best_params[6],
+      "Internal Parameter 1" =  .Object@best_params[7],
+      "Internal Parameter 2" =  .Object@best_params[8],
+      "Jump Magnitude" =  .Object@best_params[9],
+      "Jump Time" =  .Object@best_params[10],
+      "Jump Decay" =  .Object@best_params[11]
     )
-    df_parameters  
+    return(df_parameters)
   }
 )
 
+setGeneric(name="create_datasets_predictions",
+           def=function(.Object, ...)
+           {
+             standardGeneric("create_datasets_predictions")
+           }
+)
 
 setMethod("create_datasets_predictions", "DELPHIDataCreator",function(.Object, ...)
     {
@@ -111,9 +122,9 @@ setMethod("create_datasets_predictions", "DELPHIDataCreator",function(.Object, .
       #  the second since the day the area had 100 cases
       #  :return: tuple of dataframes with predictions from DELPHI model
         
-        n_days_btw_today_since_100 <- as.numeric(difftime(Sys.Date() , .Object@date_day_since100, units = "days"))
+        n_days_btw_today_since_100 <- as.integer(difftime(Sys.Date() , .Object@date_day_since100, units = "days"))
         
-        n_days_since_today <- as.numeric(difftime(object@x_sol_final[[2]]  , n_days_btw_today_since_100, units = "days"))
+        n_days_since_today <- as.integer(difftime(.Object@x_sol_final[[2]]  , n_days_btw_today_since_100, units = "days"))
         
         all_dates_since_today <- c()
         for (i in 1:n_days_since_today){
@@ -171,25 +182,23 @@ setMethod("create_datasets_predictions", "DELPHIDataCreator",function(.Object, .
         active_ventilated <- .Object@x_sol_final[[13]] + .Object@x_sol_final[[14]] # DVR + DVD
         active_ventilated <- as.integer(active_ventilated)
         
+        print(n_days_since_today)
+        print(.Object)
         
         # Generation of the dataframe since today
-        df_predictions_since_today_cont_country_prov <- data.frame
-        (
+        #must redo!!!!
+        df_predictions_since_today_cont_country_prov <- base::data.frame(
           
-            "Continent" = rep( .Object@continent, n_days_since_today), # for _ in range(n_days_since_today)],
-            "Country"= rep(object@country, n_days_since_today), #for _ in range(n_days_since_today)],
-            "Province"= rep(object@province, n_days_since_today), #for _ in range(n_days_since_today)],
-            "Day"= all_dates_since_today,
-            "Total Detected": total_detected[n_days_btw_today_since_100],
-            "Active": active_cases[n_days_btw_today_since_100],
-            "Active Hospitalized": active_hospitalized[n_days_btw_today_since_100],
-            "Cumulative Hospitalized": cumulative_hospitalized[
-              n_days_btw_today_since_100
-                ],
-            "Total Detected Deaths": total_detected_deaths[
-              n_days_btw_today_since_100
-                ],
-            "Active Ventilated": active_ventilated[n_days_btw_today_since_100]
+            Continent = base::rep( .Object@continent, times= n_days_since_today), # for _ in range(n_days_since_today)],
+            Country= rep(.Object@country, n_days_since_today), #for _ in range(n_days_since_today)],
+            Province= rep(.Object@province, n_days_since_today), #for _ in range(n_days_since_today)],
+            Day = all_dates_since_today,
+            "Total Detected" = total_detected[n_days_btw_today_since_100],
+            Active = active_cases[n_days_btw_today_since_100],
+            "Active Hospitalized"= active_hospitalized[n_days_btw_today_since_100],
+            "Cumulative Hospitalized"= cumulative_hospitalized[ n_days_btw_today_since_100  ],
+            "Total Detected Deaths"= total_detected_deaths[  n_days_btw_today_since_100 ],
+            "Active Ventilated"= active_ventilated[n_days_btw_today_since_100]
           
         )
         
@@ -201,8 +210,8 @@ setMethod("create_datasets_predictions", "DELPHIDataCreator",function(.Object, .
         
         
         all_dates_since_100 <- c()
-        start_date <- as.date(object@date_day_since100)
-        end_date <-  as.date(object@x_sol_final[[1]])
+        start_date <- as.date(.Object@date_day_since100)
+        end_date <-  as.date(.Object@x_sol_final[[1]])
         length_of_days <- as.numeric(difftime(end_date , start_date, units = "days"))
         for (i in 1:length_of_days)
         {
@@ -210,10 +219,10 @@ setMethod("create_datasets_predictions", "DELPHIDataCreator",function(.Object, .
           all_dates_since_100 <- c(all_dates_since_100, toString(temp_date))
         }
         
-        df_predictions_since_100_cont_country_prov = pd.DataFrame(
-            "Continent" = rep(object@continent, length(all_dates_since_100)) , #[object@continent for _ in range(len(all_dates_since_100))],
-            "Country"= rep(object@country, length(all_dates_since_100)), #[object@country for _ in range(len(all_dates_since_100))],
-            "Province"=rep(object@province,  length(all_dates_since_100)), #[object@province for _ in range(len(all_dates_since_100))],
+        df_predictions_since_100_cont_country_prov <- data.frame(
+            "Continent" = rep(.Object@continent, length(all_dates_since_100)) , #[object@continent for _ in range(len(all_dates_since_100))],
+            "Country"= rep(.Object@country, length(all_dates_since_100)), #[object@country for _ in range(len(all_dates_since_100))],
+            "Province"=rep(.Object@province,  length(all_dates_since_100)), #[object@province for _ in range(len(all_dates_since_100))],
             "Day"= all_dates_since_100,
             "Total Detected"= total_detected,
             "Active"= active_cases,
@@ -222,11 +231,18 @@ setMethod("create_datasets_predictions", "DELPHIDataCreator",function(.Object, .
             "Total Detected Deaths"= total_detected_deaths,
             "Active Ventilated"= active_ventilated
         )
-       list(
+       return(list(
           df_predictions_since_today_cont_country_prov,
           df_predictions_since_100_cont_country_prov,
-        )
+        ))
     })
+
+setGeneric(name="create_datasets_raw",
+           def=function(.Object, ...)
+           {
+             standardGeneric("create_datasets_raw")
+           }
+)
 
 setMethod("create_datasets_raw", "DELPHIDataCreator",
           function(.Object, ...) 
@@ -246,7 +262,7 @@ setMethod("create_datasets_raw", "DELPHIDataCreator",
      }
      
     
-    df_predictions_since_today_cont_country_prov = pd.DataFrame(
+    df_predictions_since_today_cont_country_prov <- data.frame(
     
         "Continent" = .Object@continent, #[object@continent for _ in range(n_days_since_today)],
         "Country"= .Object@country, #[object@country for _ in range(n_days_since_today)],
@@ -254,7 +270,7 @@ setMethod("create_datasets_raw", "DELPHIDataCreator",
         "Day"= all_dates_since_today
     )
     
-    intr_since_today <- data.frame( transpose(object@x_sol_final[[]][ n_days_btw_today_since_100]) )
+    intr_since_today <- data.frame( transpose(.Object@x_sol_final[[]][ n_days_btw_today_since_100]) )
     
     colnames(intr_since_today) <-  c(
       "S",      "E",      "I",      "AR",
@@ -276,8 +292,8 @@ setMethod("create_datasets_raw", "DELPHIDataCreator",
     #  ]
     
     all_dates_since_100 <- c()
-    start_date <- as.date(object@date_day_since100)
-    end_date <-  as.date(object@x_sol_final[[1]])
+    start_date <- as.date(.Object@date_day_since100)
+    end_date <-  as.date(.Object@x_sol_final[[1]])
     length_of_days <- as.numeric(difftime(end_date , start_date, units = "days"))
     for (i in 1:length_of_days)
     {
@@ -288,14 +304,14 @@ setMethod("create_datasets_raw", "DELPHIDataCreator",
     
     
     df_predictions_since_100_cont_country_prov <- pd.DataFrame(
-        "Continent"= rep(object@continent,  length(all_dates_since_100)), # [object@continent for _ in range(len(all_dates_since_100))],
-        "Country"= rep(object@country,  length(all_dates_since_100)) , #: [object@country for _ in range(len(all_dates_since_100))],
-        "Province"= rep(object@province,  length(all_dates_since_100)), #: [object@province for _ in range(len(all_dates_since_100))],
+        "Continent"= rep(.Object@continent,  length(all_dates_since_100)), # [object@continent for _ in range(len(all_dates_since_100))],
+        "Country"= rep(.Object@country,  length(all_dates_since_100)) , #: [object@country for _ in range(len(all_dates_since_100))],
+        "Province"= rep(.Object@province,  length(all_dates_since_100)), #: [object@province for _ in range(len(all_dates_since_100))],
         "Day": rep(all_dates_since_100,   length(all_dates_since_100))
     )
     
     #intr_since_100 = pd.DataFrame(object@x_sol_final.transpose())
-    intr_since_100 <- data.frame(transpose(object@sol_final))
+    intr_since_100 <- data.frame(transpose(.Object@sol_final))
     
     colnames(intr_since_100) <-  c("S",   "E",    "I",   "AR",
       "DHR",  "DQR",    "AD",   "DHD",    "DQD",    "R",    "D",
@@ -308,12 +324,22 @@ setMethod("create_datasets_raw", "DELPHIDataCreator",
     df_predictions_since_100_cont_country_prov <- bind_cols(df_predictions_since_100_cont_country_prov, 
                                                             intr_since_100)
     
-    list (
+    return(list (
       df_predictions_since_today_cont_country_prov,
       df_predictions_since_100_cont_country_prov
-    )
+    ))
 })
 
+setGeneric(name="create_datasets_with_confidence_intervals",
+           def=function(.Object, cases_data_fit, 
+                        deaths_data_fit, 
+                        past_prediction_file ,
+                        past_prediction_date ,
+                        q ,...)
+           {
+             standardGeneric("create_datasets_with_confidence_intervals")
+           }
+)
 
 setMethod("create_datasets_with_confidence_intervals", "DELPHIDataCreator",
           function(.Object, 
@@ -489,9 +515,9 @@ setMethod("create_datasets_with_confidence_intervals", "DELPHIDataCreator",
         # Generation of the dataframe since today
         df_predictions_since_today_cont_country_prov <- data.frame(
         
-            "Continent" = rep(object@continent, n_days_since_today), #: [self.continent for _ in range(n_days_since_today)],
-            "Country" =  rep(object@country, n_days_since_today), #: [self.country for _ in range(n_days_since_today)],
-            "Province"=  rep(object@province, n_days_since_today),#: [self.province for _ in range(n_days_since_today)],
+            "Continent" = rep(.Object@continent, n_days_since_today), #: [self.continent for _ in range(n_days_since_today)],
+            "Country" =  rep(.Object@country, n_days_since_today), #: [self.country for _ in range(n_days_since_today)],
+            "Province"=  rep(.Object@province, n_days_since_today),#: [self.province for _ in range(n_days_since_today)],
             "Day"= all_dates_since_today,
             "Total Detected"= total_detected[n_days_btw_today_since_100:length(total_detected)],
             "Active"= active_cases[n_days_btw_today_since_100:length(active_cases)],
@@ -511,8 +537,8 @@ setMethod("create_datasets_with_confidence_intervals", "DELPHIDataCreator",
           # Generation of the dataframe from the day since 100th case
           
           all_dates_since_100 <- c()
-          start_date <- as.date(object@date_day_since100)
-          end_date <-  as.date(object@x_sol_final[[1]])
+          start_date <- as.date(.Object@date_day_since100)
+          end_date <-  as.date(.Object@x_sol_final[[1]])
           length_of_days <- as.numeric(difftime(end_date , start_date, units = "days"))
           for (i in 1:length_of_days)
           {
@@ -547,11 +573,15 @@ setMethod("create_datasets_with_confidence_intervals", "DELPHIDataCreator",
           total_detected_death_column_lb <- make_increasing(total_detected_death_column_lb)
           total_detected_death_column_ub <- make_increasing(total_detected_death_column_ub)
           
-          df_predictions_since_100_cont_country_prov <- data.frame
-          (
-              "Continent" = rep(objecet@continent, length(all_dates_since_100)),
-              "Country"=  rep(objecet@country, length(all_dates_since_100)),  #[self.country for _ in range(len(all_dates_since_100))],
-              "Province" =  rep(objecet@province, length(all_dates_since_100)),   #: [  self.province for _ in range(len(all_dates_since_100))  ],
+          
+          continent_column <- rep(.Object@continent, length(all_dates_since_100))
+          country_column <- rep(.Object@country, length(all_dates_since_100))
+          province_column <- rep(.Object@province, length(all_dates_since_100))
+          
+          df_predictions_since_100_cont_country_prov <- data.frame (
+              "Continent" = continent_column,
+              "Country"=  country_column,  #[self.country for _ in range(len(all_dates_since_100))],
+              "Province" = province_column,   #: [  self.province for _ in range(len(all_dates_since_100))  ],
               "Day" = all_dates_since_100,
               "Total Detected" = total_detected,
               "Active" = active_cases,
@@ -569,11 +599,11 @@ setMethod("create_datasets_with_confidence_intervals", "DELPHIDataCreator",
       }
       else 
       {
-        df_predictions_since_today_cont_country_prov = pd.DataFrame(
+        df_predictions_since_today_cont_country_prov <- data.frame(
           
-            "Continent" = rep(object@continent,  n_days_since_today ), #: [self.continent for _ in range(n_days_since_today)],
-            "Country" = rep(object@country,  n_days_since_today ), #: [self.country for _ in range(n_days_since_today)],
-            "Province"= rep(object@province,  n_days_since_today ), #: [self.province for _ in range(n_days_since_today)],
+            "Continent" = rep(.Object@continent,  n_days_since_today ), #: [self.continent for _ in range(n_days_since_today)],
+            "Country" = rep(.Object@country,  n_days_since_today ), #: [self.country for _ in range(n_days_since_today)],
+            "Province"= rep(.Object@province,  n_days_since_today ), #: [self.province for _ in range(n_days_since_today)],
             "Day" =  all_dates_since_today,
             "Total Detected"= total_detected[n_days_btw_today_since_100:length(total_detected)],
             "Active"= active_cases[n_days_btw_today_since_100:length(active_cases)],
@@ -609,9 +639,9 @@ setMethod("create_datasets_with_confidence_intervals", "DELPHIDataCreator",
           
           df_predictions_since_100_cont_country_prov <- data.frame(
             
-              "Continent"= rep(object@continent, all_dates_since_100), #: [ self.continent for _ in range(len(all_dates_since_100)) ],
-              "Country"= rep(object@country, all_dates_since_100), #:     [ self.country for _ in range(len(all_dates_since_100))],
-              "Province" =  rep(object@province, all_dates_since_100),  #:[ self.province for _ in range(len(all_dates_since_100)) ],
+              "Continent"= rep(.Object@continent, all_dates_since_100), #: [ self.continent for _ in range(len(all_dates_since_100)) ],
+              "Country"= rep(.Object@country, all_dates_since_100), #:     [ self.country for _ in range(len(all_dates_since_100))],
+              "Province" =  rep(.Object@province, all_dates_since_100),  #:[ self.province for _ in range(len(all_dates_since_100)) ],
               "Day" = all_dates_since_100,
               "Total Detected" = total_detected,
               "Active" = active_cases,
@@ -638,20 +668,28 @@ setMethod("create_datasets_with_confidence_intervals", "DELPHIDataCreator",
           )
       }
           
-      list (
+      return (list (
         df_predictions_since_today_cont_country_prov,
         df_predictions_since_100_cont_country_prov,
-      ) 
+      ) )
   })
+
+
+setGeneric(name="create_datasets_predictions_scenario",
+           def=function(.Object,  policy , time , totalcases,...)
+           {
+             standardGeneric("create_datasets_predictions_scenario")
+           }
+)
 
 
 setMethod("create_datasets_predictions_scenario", "DELPHIDataCreator",
           function(.Object, policy = "Lockdown", time =  0, totalcases=NaN, ...   )
 {
       n_days_btw_today_since_100 <- #( Sys.Date()  - as.Date(object@date_day_since100).days
-        as.numeric(difftime(Sys.Date()  , as.Date(object@date_day_since100), units = "days"))
+        as.numeric(difftime(Sys.Date()  , as.Date(.Object@date_day_since100), units = "days"))
       #n_days_since_today = self.x_sol_final.shape[1] - n_days_btw_today_since_100
-      n_days_since_today <- as.numeric(difftime(object@x_sol_final[[2]]  , n_days_btw_today_since_100, units = "days"))
+      n_days_since_today <- as.numeric(difftime(.Object@x_sol_final[[2]]  , n_days_btw_today_since_100, units = "days"))
       #all_dates_since_today = [
       #  str((datetime.now() + timedelta(days=i)).date())
       #  for i in range(n_days_since_today)
@@ -667,29 +705,29 @@ setMethod("create_datasets_predictions_scenario", "DELPHIDataCreator",
       total_detected <- unlist(.Object@x_sol_final[[16]]) #, :]  # DT
       total_detected <- as.integer(unlist(total_detected)) #= [int(round(x, 0)) for x in total_detected]
       active_cases <- c(
-        unlist(object@x_sol_final[[5]]),
-        unlist(object@x_sol_final[[6]]),
-        unlist(object@x_sol_final[[8]]),
+        unlist(.Object@x_sol_final[[5]]),
+        unlist(.Object@x_sol_final[[6]]),
+        unlist(.Object@x_sol_final[[8]]),
         unlist(.Object@x_sol_final[[9]])
       )  # DHR + DQR + DHD + DQD
       active_cases <- as.integer(active_cases) #= [int(round(x, 0)) for x in active_cases]
-      active_hospitalized <- c(unlist(object@x_sol_final[[5]]), .Object@x_sol_final[[8]] )  # DHR + DHD
+      active_hospitalized <- c(unlist(.Object@x_sol_final[[5]]), .Object@x_sol_final[[8]] )  # DHR + DHD
               #= (  self.x_sol_final[4, :] + self.x_sol_final[7, :]  )  # DHR + DHD
       active_hospitalized <- #= [int(round(x, 0)) for x in active_hospitalized]
-      cumulative_hospitalized <- as.integer(unlist(object@sol_final[[11]])) #= self.x_sol_final[11, :]  # TH
+      cumulative_hospitalized <- as.integer(unlist(.Object@sol_final[[11]])) #= self.x_sol_final[11, :]  # TH
      # cumulative_hospitalized  = [int(round(x, 0)) for x in cumulative_hospitalized]
-      total_detected_deaths <- as.integer(unlist(object@x_sol_final[[14]])) #  = self.x_sol_final[14, :]  # DD
+      total_detected_deaths <- as.integer(unlist(.Object@x_sol_final[[14]])) #  = self.x_sol_final[14, :]  # DD
       #total_detected_deaths = [int(round(x, 0)) for x in total_detected_deaths]
-      active_ventilated <- as.integer(c(unlist(object@x_sol_final[[13]]), unlist(object@x_sol_final[[14]])))  #= (  self.x_sol_final[12, :] + self.x_sol_final[13, :])  # DVR + DVD
+      active_ventilated <- as.integer(c(unlist(.Object@x_sol_final[[13]]), unlist(.Object@x_sol_final[[14]])))  #= (  self.x_sol_final[12, :] + self.x_sol_final[13, :])  # DVR + DVD
       #active_ventilated = [int(round(x, 0)) for x in active_ventilated]
       # Generation of the dataframe since today
       df_predictions_since_today_cont_country_prov = data.frame(
         
           "Policy" = rep(policy, n_days_since_today), #: [policy for _ in range(n_days_since_today)],
           "Time" = rep(TIME_DICT[[time]], n_days_since_today) , #: [TIME_DICT[time] for _ in range(n_days_since_today)],
-          "Continent" = rep(object@continent, n_days_since_today), #: [self.continent for _ in range(n_days_since_today)],
-          "Country" = rep(object@country, n_days_since_today), #: [self.country for _ in range(n_days_since_today)],
-          "Province" = rep(object@province, n_days_since_today), #: [self.province for _ in range(n_days_since_today)],
+          "Continent" = rep(.Object@continent, n_days_since_today), #: [self.continent for _ in range(n_days_since_today)],
+          "Country" = rep(.Object@country, n_days_since_today), #: [self.country for _ in range(n_days_since_today)],
+          "Province" = rep(.Object@province, n_days_since_today), #: [self.province for _ in range(n_days_since_today)],
           "Day" = all_dates_since_today,
           "Total Detected" =  total_detected[n_days_btw_today_since_100:length(total_detected)],
           "Active" =  active_cases[n_days_btw_today_since_100:length(active_cases)],
@@ -715,14 +753,13 @@ setMethod("create_datasets_predictions_scenario", "DELPHIDataCreator",
         all_dates_since_100 <- c(all_dates_since_100, toString(temp_date))
       }
       
-      df_predictions_since_100_cont_country_prov = data.frame
-      (
+      df_predictions_since_100_cont_country_prov = data.frame(
         
           "Policy"= rep(policy, all_dates_since_100), #: [policy for _ in range(len(all_dates_since_100))],
           "Time" = rep(TIME_DICT[[time]], all_dates_since_100) , #: [TIME_DICT[time] for _ in range(len(all_dates_since_100))],
-          "Continent" = rep(object@continent, all_dates_since_100), #: [self.continent for _ in range(len(all_dates_since_100))],
-          "Country"= rep(object@country, all_dates_since_100), #: [self.country for _ in range(len(all_dates_since_100))],
-          "Province" = rep(object@province, all_dates_since_100), #: [self.province for _ in range(len(all_dates_since_100))],
+          "Continent" = rep(.Object@continent, all_dates_since_100), #: [self.continent for _ in range(len(all_dates_since_100))],
+          "Country"= rep(.Object@country, all_dates_since_100), #: [self.country for _ in range(len(all_dates_since_100))],
+          "Province" = rep(.Object@province, all_dates_since_100), #: [self.province for _ in range(len(all_dates_since_100))],
           "Day"= all_dates_since_100,
           "Total Detected"= total_detected,
           "Active"= active_cases,
@@ -796,10 +833,10 @@ setMethod("create_datasets_predictions_scenario", "DELPHIDataCreator",
           #  ["country", "province", "date"], axis=1, inplace=True
           #)
       }
-     list(
+     return (list(
         df_predictions_since_today_cont_country_prov,
         df_predictions_since_100_cont_country_prov
-      )
+      ))
     })
 
 get_aggregation_per_country <- function(df_predictions) 
@@ -832,14 +869,14 @@ get_aggregation_per_continent <- function(df_predictions)
   df_agg_continent
 }
 
-get_aggregation_world(df_predictions) 
+get_aggregation_world <- function(df_predictions) 
 {
   #Aggregates predictions at the world level from the predictions dataframe
   #      :param df_predictions: DELPHI predictions dataframe
   #      :return: DELPHI predictions dataframe aggregated at the world level (only one row in this dataframe)
    
   #df_agg_world = df_predictions.groupby("Day").sum().reset_index()
-  df_agg_world <-  df_predictions %>% group_by("Day") %>% summarise()
+  df_agg_world <-  df_predictions %>% group_by("Day") %>% summarise(sum())
   df_agg_world["Continent"] <- "None"
   df_agg_world["Country"] <- "None"
   df_agg_world["Province"] <- "None"
@@ -847,7 +884,7 @@ get_aggregation_world(df_predictions)
   df_agg_world
 }
 
-append_all_aggregations(df_predictions: pd.DataFrame) {
+append_all_aggregations <- function(df_predictions) {
 
       # Creates and appends all the predictions' aggregations at the country, continent and world levels
       #  :param df_predictions: dataframe with the raw predictions from DELPHI
@@ -895,7 +932,7 @@ append_all_aggregations(df_predictions: pd.DataFrame) {
       }
       
       #df_agg_country = df_predictions[columns_without_bounds].groupby(["Continent", "Country", "Day"]).sum(min_count = 1).reset_index()
-      df_agg_country <- df_predictions %>% group_by(["Continent", "Country", "Day"]) %>%
+      df_agg_country <- df_predictions %>% group_by("Continent", "Country", "Day") %>%
         summarize(sum = sum( na.rm = TRUE)) %>% select(columns_without_bounds)
       
     
@@ -982,7 +1019,7 @@ append_all_aggregations(df_predictions: pd.DataFrame) {
             
                         
             # Generation of the dataframe from the day since 100th case
-            df_predictions_since_100_cont_country_prov = pd.DataFrame(
+            df_predictions_since_100_cont_country_prov <- data.frame(
               "Total Detected LB"= data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
                 mutate(max = max(as.integer(round(v + residual_cases_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max) 
                 ,
@@ -1004,8 +1041,7 @@ append_all_aggregations(df_predictions: pd.DataFrame) {
         } 
         else
         {
-            df_predictions_since_100_cont_country_prov = pd.DataFrame
-            (
+            df_predictions_since_100_cont_country_prov <- data.frame(
               "Total Detected LB" = rep(NaN, nrow(df_agg_country_temp) ),  #: [np.nan for _ in range(len(df_agg_country_temp))],  
               "Total Detected Deaths LB" = rep(NaN, nrow(df_agg_country_temp) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
               "Total Detected UB"  = rep(NaN, nrow(df_agg_country_temp) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
@@ -1133,7 +1169,7 @@ append_all_aggregations(df_predictions: pd.DataFrame) {
               
               # Generation of the dataframe from the day since 100th cas
               
-              df_predictions_since_100_cont_country_prov = pd.DataFrame(
+              df_predictions_since_100_cont_country_prov <- data.frame(
                 "Total Detected LB"= data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
                   mutate(max = max(as.integer(round(v + residual_cases_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max) 
                 ,
@@ -1156,8 +1192,7 @@ append_all_aggregations(df_predictions: pd.DataFrame) {
         else 
         {
     
-          df_predictions_since_100_cont_country_prov = pd.DataFrame
-          (
+          df_predictions_since_100_cont_country_prov <- data.frame(
             "Total Detected LB" = rep(NaN, nrow(df_agg_continent_temp) ),  #: [np.nan for _ in range(len(df_agg_country_temp))],  
             "Total Detected Deaths LB" = rep(NaN, nrow(df_agg_continent_temp) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
             "Total Detected UB"  = rep(NaN, nrow(df_agg_continent_temp) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
@@ -1260,7 +1295,7 @@ append_all_aggregations(df_predictions: pd.DataFrame) {
           
           
           # Generation of the dataframe from the day since 100th case
-          df_predictions_since_100_cont_country_prov = pd.DataFrame(
+          df_predictions_since_100_cont_country_prov < data.frame(
             "Total Detected LB" = data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
               mutate(max = max(as.integer(round(v + residual_cases_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max), 
             "Total Detected Deaths LB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
@@ -1279,8 +1314,7 @@ append_all_aggregations(df_predictions: pd.DataFrame) {
       else
       {
         
-        df_predictions_since_100_cont_country_prov = pd.DataFrame
-        (
+        df_predictions_since_100_cont_country_prov <- data.frame(
           "Total Detected LB" = rep(NaN, nrow(df_agg_world) ),  #: [np.nan for _ in range(len(df_agg_country_temp))],  
           "Total Detected Deaths LB" = rep(NaN, nrow(df_agg_world) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
           "Total Detected UB"  = rep(NaN, nrow(df_agg_world) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
@@ -1347,14 +1381,14 @@ get_aggregation_per_country <- function(df_policy_predictions)
   
     df_policy_predictions <- df_policy_predictions %>% filter(Province != "None")
     
-    df_agg_country <- df_policy_predictions %>% groupby(Policy, Time, Continent, Country, Day) %>% aggregate(sum())
+    df_agg_country <- df_policy_predictions %>%  group_by(Policy, Time, Continent, Country, Day) %>% summarize(sum)
   
     df_agg_country["Province"] <- "None"
     df_agg_country <- df_agg_country %>% select("Policy", "Time", "Continent", "Country", "Province", 
-        "Day", "Total Detected", "Active", "Active Hospitalized", "Cumulative Hospitalized", 
-        "Total Detected Deaths", "Active Ventilated")
+        "Day", "Total.Detected", "Active", "Active.Hospitalized", "Cumulative.Hospitalized", 
+        "Total.Detected.Deaths", "Active.Ventilated")
     
-    df_agg_country
+    return(df_agg_country)
 }
 
 get_aggregation_per_continent <- function(df_policy_predictions)
@@ -1363,16 +1397,16 @@ get_aggregation_per_continent <- function(df_policy_predictions)
         #:param df_policy_predictions: DELPHI policy predictions dataframe
         #:return: DELPHI policy predictions dataframe aggregated at the continent level
         
-    df_agg_continent <- df_policy_predictions.groupby %>% group_by(Policy, Time, Continent, Day) %>% aggregate(sum())
+    df_agg_continent <- df_policy_predictions %>% group_by(Policy, Time, Continent, Day) %>% aggregate(sum())
     
     df_agg_continent["Country"] <- "None"
     df_agg_continent["Province"] <- "None"
-    df_agg_continent <- df_agg_continent %>% select ("Policy", "Time", "Continent", "Country", "Province", "Day", "Total Detected", "Active",
-        "Active Hospitalized", "Cumulative Hospitalized", "Total Detected Deaths", "Active Ventilated")
-    df_agg_continent
+    df_agg_continent <- df_agg_continent %>% select ("Policy", "Time", "Continent", "Country", "Province", "Day", "Total.Detected", "Active",
+        "Active.Hospitalized", "Cumulative.Hospitalized", "Total.Detected Deaths", "Active.Ventilated")
+    return (df_agg_continent)
 }
 
-get_aggregation_world(df_policy_predictions)
+get_aggregation_world <- function(df_policy_predictions)
 {
  #Aggregates policy predictions at the world level from the predictions dataframe
  #:param df_policy_predictions: DELPHI policy predictions dataframe
@@ -1382,9 +1416,10 @@ get_aggregation_world(df_policy_predictions)
     df_agg_world["Continent"] <- "None"
     df_agg_world["Country"] <- "None"
     df_agg_world["Province"] <- "None"
-    df_agg_world <- df_agg_world %>% select( "Policy", "Time", "Continent", "Country", "Province", "Day", "Total Detected", "Active",
-        "Active Hospitalized", "Cumulative Hospitalized", "Total Detected Deaths", "Active Ventilated")
-    df_agg_world
+    df_agg_world <- df_agg_world %>% select( "Policy", "Time", "Continent", "Country", "Province", "Day", "Total.Detected", 
+                                             "Active", "Active.Hospitalized", "Cumulative.Hospitalized", "Total.Detected.Deaths", 
+                                             "Active.Ventilated")
+    return(df_agg_world)
 }
 
 append_all_aggregations <- function(df_policy_predictions)
@@ -1404,7 +1439,7 @@ append_all_aggregations <- function(df_policy_predictions)
       df_agg_since_today_world
   )
   df_policy_predictions <- df_policy_predictions %>% arrange( Policy, Time, Continent, Country, Province, Day)
-  df_policy_predictions
+  return(df_policy_predictions)
 }
 
 DELPHIBacktest <- setClass( 
@@ -1419,18 +1454,19 @@ DELPHIBacktest <- setClass(
     prediction_date = "Date",
     n_days_backtest = "numeric",
     get_mae = "logical",
-    get_mse = "get_mse",
-    logger = "flog.logger"),
+    get_mse = "logical"#,
+    #logger = "futile.logger::flog.logger"
+    ),
   
-  prototype = list(
-    testing_data_included = TRUE, 
-    date_day_since100 = Sys.Date() - 100)
+  #prototype = list(
+  #  testing_data_included = TRUE, 
+  #  date_day_since100 = Sys.Date() - 100)
   
 )
 
-validDELPHIBacktestObject <- function(object) 
+validDELPHIBacktestObject <- function(.Object) 
 {
-  historical_data_path
+  #historical_data_path
   TRUE
 }
 ## assign the function as the validity method for the class
@@ -1443,23 +1479,29 @@ setMethod("initialize", "DELPHIBacktest",
                n_days_backtest ,
                get_mae ,
                get_mse ,
-               logger ,
+               #logger ,
                ...) 
       {  
         if (!missing(path_to_folder_danger_map)) { 
-          .Object@historical_data_path = path_to_folder_danger_map + "processed/Global/" 
+          .Object@historical_data_path <- path_to_folder_danger_map + "processed/Global/" 
         }
         if (!missing(prediction_data_path)) { 
-          .Object@prediction_data_path = path_to_folder_danger_map + "predicted/"
+          .Object@prediction_data_path <- path_to_folder_danger_map + "predicted/"
         }
         if (!missing(prediction_date)) { .Object@prediction_date <- prediction_date }
         if (!missing(n_days_backtest)) { .Object@n_days_backtest <- n_days_backtest }
         if (!missing(get_mae)) { .Object@get_mae <- get_mae }
         if (!missing(get_mse)) { .Object@get_mse <- get_mse }
-        if (!missing(logger)) { .Object@logger <- logger }
+        #if (!missing(logger)) { .Object@logger <- logger }
       }
 )
 
+setGeneric(name="get_historical_data_df",
+           def=function(.Object, ...)
+           {
+             standardGeneric("get_historical_data_df")
+           }
+)
 
 # get_historical_data_df(self) -> pd.DataFrame:
  setMethod("get_historical_data_df", "DELPHIBacktest", function(.Object,    ...) 
@@ -1519,12 +1561,20 @@ setMethod("initialize", "DELPHIBacktest",
     
     #df_historical = df_historical[df_historical.tuple != ("US", "None")].reset_index(drop=True)
     df_historical <- df_historical %>% filter(!(tuple %in%  list("US", "None")))
-    df_historical
+    return(df_historical)
  })
 
  
 #get_prediction_data   (self) -> pd.DataFrame:
   
+setGeneric(name="get_prediction_data",
+           def=function(.Object, ...)
+           {
+             standardGeneric("get_prediction_data")
+           }
+)
+
+
 setMethod("get_prediction_data", "DELPHIBacktest", function(.Object,    ...) 
 {    
   
@@ -1536,13 +1586,16 @@ setMethod("get_prediction_data", "DELPHIBacktest", function(.Object,    ...)
    prediction_date_filename <- paste(str_split(.Object@prediction_date, "-"), sep = "")
    
    if (file.exists(paste(.Object@prediction_data_path , "Global_V2_", prediction_date_filename, ".csv", sep = ""))){
-     .Object@logger.info("Backtesting on DELPHI V3.0 predictions because filename contains _V2")
+     #.Object@logger.info("Backtesting on DELPHI V3.0 predictions because filename contains _V2")
+     
+     futile.logger("Backtesting on DELPHI V3.0 predictions because filename contains _V2")
    
       df_prediction <- read_csv(paste(.Object@prediction_data_path , "Global_V2_", prediction_date_filename , ".csv", sep=""))
    #elif os.path.exists(self.prediction_data_path + f"Global_V2_{prediction_date_filename}.csv"):
     } else if (!file.exists(paste(.Object@prediction_data_path , "Global_V2_", prediction_date_filename, ".csv", sep = ""))) {  
       #self.logger.info("Backtesting on DELPHI V1.0 or V2.0 predictions because filename doesn't contain _V2")
-      .Object@logger.info("Backtesting on DELPHI V1.0 or V2.0 predictions because filename doesn't contain _V2")
+      #.Object@logger.info("Backtesting on DELPHI V1.0 or V2.0 predictions because filename doesn't contain _V2")
+      futile.logger("Backtesting on DELPHI V1.0 or V2.0 predictions because filename doesn't contain _V2")
       df_prediction <- read_csv(paste(.Object@prediction_data_path , "Global_V1_", prediction_date_filename, ".csv", sept=""))
     } else {
      stop(paste("The file on prediction date ", .Object@prediction_date, " has never been generated", sep = ""))
@@ -1552,6 +1605,12 @@ setMethod("get_prediction_data", "DELPHIBacktest", function(.Object,    ...)
 })
  
 
+setGeneric(name="generate_empty_metrics_dict",
+           def=function(.Object, ...)
+           {
+             standardGeneric("generate_empty_metrics_dict")
+           }
+)
 #def generate_empty_metrics_dict(self) -> dict:
 setMethod("generate_empty_metrics_dict", "DELPHIBacktest", function(.Object,    ...) 
 { 
@@ -1580,6 +1639,13 @@ setMethod("generate_empty_metrics_dict", "DELPHIBacktest", function(.Object,    
   dict_df_backtest_metrics
 })
 
+
+setGeneric(name="get_backtest_metrics_area",
+           def=function(.Object, df_backtest,  tuple_area , dict_df_backtest_metrics, ...)
+           {
+             standardGeneric("get_backtest_metrics_area")
+           }
+)
 #def get_backtest_metrics_area(  self, df_backtest: pd.DataFrame, tuple_area: tuple, dict_df_backtest_metrics: dict,)
 setMethod("get_backtest_metrics_area", "DELPHIBacktest", function(.Object, df_backtest,  tuple_area , dict_df_backtest_metrics, ...) 
 {
@@ -1649,7 +1715,7 @@ setMethod("get_backtest_metrics_area", "DELPHIBacktest", function(.Object, df_ba
       dict_df_backtest_metrics["mse_deaths"] <- append(dict_df_backtest_metrics["mse_deaths"], mse_deaths)
     }
     
-    dict_df_backtest_metrics
+    return(dict_df_backtest_metrics)
 } )
 
 get_initial_conditions <- function(params_fitted, global_params_fixed) 
@@ -1809,7 +1875,7 @@ get_residuals_value <- function (
     residuals_value
 }
 
-get_mape_data_fitting <- get_mape_data_fitting(cases_data_fit, deaths_data_fit, x_sol_final) # -> float:
+get_mape_data_fitting <- function(cases_data_fit, deaths_data_fit, x_sol_final) # -> float:
 {
     #Computes MAPE on cases & deaths (averaged) either on last 15 days of historical data (if there are more than 15)
     #or exactly the number of days in the historical data (if less than 15)
@@ -1926,7 +1992,7 @@ compute_mae_and_mape <- function(y_true, y_pred)
 }
 
 
-compute_mape <- functio(y_true, y_pred) # -> float:
+compute_mape <- function(y_true, y_pred) # -> float:
 {
     #Compute the Mean Absolute Percentage Error (MAPE) between two lists of values
     #:param y_true: list of true historical values

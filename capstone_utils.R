@@ -1,7 +1,6 @@
 #https://github.com/COVIDAnalytics/DELPHI
 require(tidyverse)
 require(data.table)
-require(data.frame)
 require(lubridate)
 require(readr)
 require(devtools)
@@ -12,6 +11,7 @@ source("params.r")
 library(dict)
 library(lubridate)
 library(stringr)
+library(jsonlite)
 
 get_testing_data_us <- function(){
   
@@ -356,59 +356,80 @@ create_final_policy_features_us <- function (df_policies_US)
     msr <- future_policies
     
     #TODO : figure out what this does.
-    df_policies_US_final[msr[0]] = (df_policies_US.sum(axis=1) == 0).apply(
-      lambda x: int(x)
-    )
+    #df_policies_US_final[msr[0]] = (df_policies_US.sum(axis=1) == 0).apply(
+    #  lambda x: int(x)
+    #)
     
-    df_policies_US_final[msr[1]] = [
-      int(a and b)
-      for a, b in zip(
-        df_policies_US.sum(axis=1) == 1,
-        df_policies_US["Mass_Gathering_Restrictions"] == 1,
-      )
-      ]
-    df_policies_US_final[msr[2]] = [
-      int(a and b and c)
-      for a, b, c in zip(
-        df_policies_US.sum(axis=1) > 0,
-        df_policies_US["Mass_Gathering_Restrictions"] == 0,
-        df_policies_US["Stay_at_home_order"] == 0,
-      )
-      ]
-    df_policies_US_final[msr[3]] = [
-      int(a and b and c)
-      for a, b, c in zip(
-        df_policies_US.sum(axis=1) == 2,
-        df_policies_US["Educational_Facilities_Closed"] == 1,
-        df_policies_US["Mass_Gathering_Restrictions"] == 1,
-      )
-      ]
-    df_policies_US_final[msr[4]] = [
-      int(a and b and c and d)
-      for a, b, c, d in zip(
-        df_policies_US.sum(axis=1) > 1,
-        df_policies_US["Educational_Facilities_Closed"] == 0,
-        df_policies_US["Mass_Gathering_Restrictions"] == 1,
-        df_policies_US["Stay_at_home_order"] == 0,
-      )
-      ]
-    df_policies_US_final[msr[5]] = [
-      int(a and b and c and d)
-      for a, b, c, d in zip(
-        df_policies_US.sum(axis=1) > 2,
-        df_policies_US["Educational_Facilities_Closed"] == 1,
-        df_policies_US["Mass_Gathering_Restrictions"] == 1,
-        df_policies_US["Stay_at_home_order"] == 0,
-      )
-      ]
-    df_policies_US_final[msr[6]] = (df_policies_US["Stay_at_home_order"] == 1).apply(
-      lambda x: int(x)
-    )
-    df_policies_US_final["country"] = "US"
-    df_policies_US_final = df_policies_US_final.loc[
-      :, ["country", "province", "date"] + msr
-      ]
-    return df_policies_US_final
+    df_policies_US_final[msr[0]] <- sum(df_policies_US)
+    
+    #df_policies_US_final[msr[1]] = [
+    #  int(a and b)
+    #  for a, b in zip(
+    #    df_policies_US.sum(axis=1) == 1,
+    #    df_policies_US["Mass_Gathering_Restrictions"] == 1,
+    #  )
+    #  ]
+    tmp <- data.frame(a = df_policies_US[which(sum(df_policies_US[1]) == 1)],
+                      b = df_policies_US[which(df_policies_US["Mass_Gathering_Restrictions"] == 1)])
+    
+    df_policies_US_final[msr[1]] <- tmp
+    
+    
+    #df_policies_US_final[msr[2]] = [
+    #  int(a and b and c)
+    #  for a, b, c in zip(
+    #    df_policies_US.sum(axis=1) > 0,
+    #    df_policies_US["Mass_Gathering_Restrictions"] == 0,
+    #    df_policies_US["Stay_at_home_order"] == 0,
+    #  )]
+    
+    #summarize over columns
+    #use colSums!!!!!!!!
+    tmp <- df_policies_US %>% filter("Mass_Gathering_Restrictions" == 0 & "Stay_at_home_order" == 0) %>%
+      colSums(myDF[c("L2", "L3", "L4")] > 0)
+            
+    
+    
+    #df_policies_US_final[msr[3]] = [
+    #  int(a and b and c)
+    #  for a, b, c in zip(
+    #    df_policies_US.sum(axis=1) == 2,
+    #    df_policies_US["Educational_Facilities_Closed"] == 1,
+    #    df_policies_US["Mass_Gathering_Restrictions"] == 1,
+    #  )
+    #]
+    
+    #df_policies_US_final[msr[4]] = [
+    #  int(a and b and c and d)
+    #  for a, b, c, d in zip(
+    #    df_policies_US.sum(axis=1) > 1,
+    #    df_policies_US["Educational_Facilities_Closed"] == 0,
+    #    df_policies_US["Mass_Gathering_Restrictions"] == 1,
+    #    df_policies_US["Stay_at_home_order"] == 0,
+    #  )
+    #  ]
+    
+    #df_policies_US_final[msr[5]] = [
+    #  int(a and b and c and d)
+    #  for a, b, c, d in zip(
+    #    df_policies_US.sum(axis=1) > 2,
+    #    df_policies_US["Educational_Facilities_Closed"] == 1,
+    #    df_policies_US["Mass_Gathering_Restrictions"] == 1,
+    #    df_policies_US["Stay_at_home_order"] == 0,
+    #  )
+    #  ]
+    
+    #df_policies_US_final[msr[6]] = (df_policies_US["Stay_at_home_order"] == 1).apply(
+    #  lambda x: int(x)
+    #)
+    
+    df_policies_US_final["country"] <- "US"
+    
+    #df_policies_US_final = df_policies_US_final.loc[
+    #  :, ["country", "province", "date"] + msr
+     # ]
+    
+    df_policies_US_final
     
 }
 
@@ -571,7 +592,8 @@ make_increasing <- function(sequence) {
   sort(sequence)
 }
 
-get_normalized_policy_shifts_and_current_policy_us_only <- function( policy_data_us_only, past_parameters ) {
+get_normalized_policy_shifts_and_current_policy_us_only <- function( policy_data_us_only, past_parameters ) 
+  {
       # Computes the normalized policy shifts and the current policy in each state of the US
         #:param policy_data_us_only: processed dataframe with the MECE policies implemented per state for every day
         #:param past_parameters: past parameters file used for policy shift generation (specifically computation of gamma(t)
@@ -585,26 +607,34 @@ get_normalized_policy_shifts_and_current_policy_us_only <- function( policy_data
     #)
     
     policy_data_us_only <- policy_data_us_only %>% 
-      mutate(province_cl = str_to_lower(str_trim(str_replace(province, "," ))))
+      mutate(province_cl = str_to_lower(str_trim(str_replace(province, ",", "" ))))
     
     
     states_upper_set = set(policy_data_us_only["province"])
     for (state in states_upper_set)
     {
-      dict_current_policy[("US", state)] = list(
-        compress(
-          policy_list,
-          (
-            policy_data_us_only.query("province == @state")[
-              policy_data_us_only.query("province == @state")["date"]
-              == policy_data_us_only.date.max()
-              ][policy_list]
-            == 1
-          )
-          .values.flatten()
-          .tolist(),
-        )
-      )[0]
+      #dict_current_policy[("US", state)] = list(
+      #  compress(
+      #    policy_list,
+      #    (
+      #      policy_data_us_only.query("province == @state")[  policy_data_us_only.query("province == @state")["date"] 
+      #                                                        == policy_data_us_only.date.max()
+      #        ]
+      #        [policy_list] == 1
+      #    )
+      #    .values.flatten()
+      #    .tolist(),
+      #  )
+      #)[0]
+      
+      state_numbers <- c()
+      tmp_state_policy <- policy_data_us_only %>% filter(province == state) %>% mutate(max_date = max(policy_data_us_only$date) ) %>%
+        filter(date == max_date) %>% select(policy_list) 
+      for (num in 1:nrow(tmp_state_policy)) 
+        state_numbers <- c(state_numbers, unlist(tmp_state_policy[num,]))
+      
+      
+      dict_current_policy[c("US", State)] <- state_numbers
     }
     
     states_set <- set(policy_data_us_only["province_cl"])
@@ -617,37 +647,65 @@ get_normalized_policy_shifts_and_current_policy_us_only <- function( policy_data
       mutate(Province = str_to_lower(str_trim(str_replace(province, "," ))))
     
     
-    params_dic = {}
-    for state in states_set:
-      params_dic[state] = past_parameters_copy.query("Province == @state")[
-        ["Data Start Date", "Median Day of Action", "Rate of Action"]
-        ].iloc[0]
-    
-    policy_data_us_only["Gamma"] = [
-      gamma_t(day, state, params_dic)
-      for day, state in zip (
-        policy_data_us_only["date"], policy_data_us_only["province_cl"]
-      )
-      ]
-    
-    n_measures = policy_data_us_only.iloc[:, 3:-2].shape[1]
-    
-    dict_normalized_policy_gamma = {
-      policy_data_us_only.columns[3 + i]: policy_data_us_only[
-        policy_data_us_only.iloc[:, 3 + i] == 1
-        ]
-      .iloc[:, -1]
-      .mean()
-      for i in range(n_measures)
+    params_dic = dict()
+    for (state in states_set) {
+      #params_dic[state] <- past_parameters_copy.query("Province == @state")[
+      #  ["Data Start Date", "Median Day of Action", "Rate of Action"]
+      #  ].iloc[0]
+      params_dic[state] <- past_parameters_copy %>% filter(Province == state) %>%
+        select("Data Start Date", "Median Day of Action", "Rate of Action")[1]
     }
     
-    normalize_val = dict_normalized_policy_gamma[policy_list[0]]
-    for policy in dict_normalized_policy_gamma.keys():
-      dict_normalized_policy_gamma[policy] = (
-        dict_normalized_policy_gamma[policy] / normalize_val
-      )
+    #policy_data_us_only["Gamma"] = [
+    #  gamma_t(day, state, params_dic)
+    #  for day, state in zip (
+    #    policy_data_us_only["date"], policy_data_us_only["province_cl"]
+    #  )
+    #  ]
     
-    vector(dict_normalized_policy_gamma, dict_current_policy)
+    tmp_df <- data.frame(day = policy_data_us_only["date"], state = policy_data_us_only["province_cl"]) %>%
+    g_t <- gamma_t(tmp_df$day, tmp_df$state, params_dic)
+      
+    #n_measures = policy_data_us_only.iloc[:, 3:-2].shape[1]
+    
+    n_measures<- policy_data_us_only[, 3:-2]
+    
+    #dict_normalized_policy_gamma = {
+    #  policy_data_us_only.columns[3 + i]: policy_data_us_only[
+    #    policy_data_us_only.iloc[:, 3 + i] == 1
+    #    ]
+    #  .iloc[:, -1]
+    #  .mean()
+    #  for i in range(n_measures)
+    #}
+    
+    for (i in 1:n_measures)
+    {
+      key <-  policy_data_us_only.columns[3 + i]
+      value <-  policy_data_us_only %>% filter( policy_data_us_only[, 3 + i] == 1  ) %>%
+        select(key) %>% summarise(mean(key))
+        #  .iloc[:, -1]
+        #  .mean()
+      dict_normalized_policy_gamma[key] <- value
+    }
+    
+    #normalize_val = dict_normalized_policy_gamma[policy_list[0]]
+    
+    normalize_val <- dict_normalized_policy_gamma[policy_list[0]]
+    
+    #for policy in dict_normalized_policy_gamma.keys():
+    #  dict_normalized_policy_gamma[policy] = (
+    #    dict_normalized_policy_gamma[policy] / normalize_val
+    #  )
+    
+    for (policy in dict_normalized_policy_gamma$keys())
+    {
+      dict_normalized_policy_gamma[policy] <- dict_normalized_policy_gamma[policy] / normalize_val
+    }
+    
+    
+    #vector(dict_normalized_policy_gamma, dict_current_policy)
+    list(dict_normalized_policy_gamma, dict_current_policy)
 
 }
 
