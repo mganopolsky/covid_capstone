@@ -12,6 +12,8 @@ library(dict)
 library(lubridate)
 library(stringr)
 library(jsonlite)
+library(iterators)
+library(itertools)
 
 get_testing_data_us <- function(){
   
@@ -117,24 +119,24 @@ get_bounds_params_from_pastparams <- function(
         max(std_normal, dict_default_reinit_parameters["std_normal"])
       )
       
-      param_list_lower <- function() {
+      param_list_lower <- c()
         
-        tmp_parameter_list = parameter_list
-        for ( i in 1:length(parameter_list) )
-           tmp_parameter_list[i] <- parameter_list[i] - max(percentage_drift_lower_bound * abs(parameter_list[i]), default_lower_bound) 
-      
-        alpha_lower = tmp_parameter_list[1]
-        days_lower = tmp_parameter_list[2]
-        r_s_lower = tmp_parameter_list[3] 
-        r_dth_lower = tmp_parameter_list[4] 
-        p_dth_lower = tmp_parameter_list[5]
-        r_dthdecay_lower = tmp_parameter_list[6]
-        k1_lower = tmp_parameter_list[7] 
-        k2_lower = tmp_parameter_list[8] 
-        jump_lower = tmp_parameter_list[9] 
-        t_jump_lower = tmp_parameter_list[10] 
-        std_normal_lower = tmp_parameter_list[11]
-      }
+      tmp_parameter_list = parameter_list
+      for ( i in 1:length(parameter_list) )
+         tmp_parameter_list[i] <- parameter_list[i] - max(percentage_drift_lower_bound * abs(parameter_list[i]), default_lower_bound) 
+    
+      alpha_lower = tmp_parameter_list[1]
+      days_lower = tmp_parameter_list[2]
+      r_s_lower = tmp_parameter_list[3] 
+      r_dth_lower = tmp_parameter_list[4] 
+      p_dth_lower = tmp_parameter_list[5]
+      r_dthdecay_lower = tmp_parameter_list[6]
+      k1_lower = tmp_parameter_list[7] 
+      k2_lower = tmp_parameter_list[8] 
+      jump_lower = tmp_parameter_list[9] 
+      t_jump_lower = tmp_parameter_list[10] 
+      std_normal_lower = tmp_parameter_list[11]
+    
    
     
     param_list_lower = c(
@@ -152,26 +154,23 @@ get_bounds_params_from_pastparams <- function(
     )
     
   
-    param_list_upper <- function() {
+    param_list_upper <- c()
       
-      tmp_parameter_list = parameter_list
-      for ( i in 1:length(parameter_list) )
-        tmp_parameter_list[i] <- parameter_list[i] + max(percentage_drift_upper_bound * abs(parameter_list[i]), default_upper_bound) 
-      
-      alpha_upper = tmp_parameter_list[1]
-      days_upper = tmp_parameter_list[2]
-      r_s_upper = tmp_parameter_list[3] 
-      r_dth_upper = tmp_parameter_list[4] 
-      p_dth_upper = tmp_parameter_list[5]
-      r_dthdecay_upper = tmp_parameter_list[6]
-      k1_upper = tmp_parameter_list[7] 
-      k2_upper = tmp_parameter_list[8] 
-      jump_upper = tmp_parameter_list[9] 
-      t_jump_upper = tmp_parameter_list[10] 
-      std_normal_upper = tmp_parameter_list[11]
-    }
+    tmp_parameter_list = parameter_list
+    for ( i in 1:length(parameter_list) )
+      tmp_parameter_list[i] <- parameter_list[i] + max(percentage_drift_upper_bound * abs(parameter_list[i]), default_upper_bound) 
     
-    
+    alpha_upper = tmp_parameter_list[1]
+    days_upper = tmp_parameter_list[2]
+    r_s_upper = tmp_parameter_list[3] 
+    r_dth_upper = tmp_parameter_list[4] 
+    p_dth_upper = tmp_parameter_list[5]
+    r_dthdecay_upper = tmp_parameter_list[6]
+    k1_upper = tmp_parameter_list[7] 
+    k2_upper = tmp_parameter_list[8] 
+    jump_upper = tmp_parameter_list[9] 
+    t_jump_upper = tmp_parameter_list[10] 
+    std_normal_upper = tmp_parameter_list[11]
   
     param_list_upper = c(
       max(alpha_upper, dict_default_reinit_upper_bounds["alpha"]),
@@ -189,32 +188,32 @@ get_bounds_params_from_pastparams <- function(
   } 
   else if ( optimizer == "annealing") 
   {  # Annealing procedure for global optimization
-    param_list_lower = function() {
-      tmp_param_list <-  parameter_list
-      for (i in 1:length(parameter_list))
-        tmp_param_list[i] <- tmp_param_list[i] - max(percentage_drift_lower_bound_annealing * abs(tmp_param_list[i]), default_lower_bound_annealing) 
+    param_list_lower <- c()
+    param_list_upper <- c()
+    
+    for (i in 1:length(parameter_list))
+    {
+      param_list_lower[i] <- parameter_list[i] - max(percentage_drift_lower_bound_annealing * abs(parameter_list[i]), default_lower_bound_annealing) 
+      param_list_upper[i] <- parameter_list[i] + max(percentage_drift_upper_bound_annealing * abs(parameter_list[i]), default_upper_bound_annealing)
     }
     
-      param_list_upper = function() {
-          tmp_param_list <-  parameter_list
-          for (i in 1:length(parameter_list))
-            tmp_param_list[i] <- tmp_param_list[i] + max(percentage_drift_upper_bound_annealing * abs(tmp_param_list[i]), default_upper_bound_annealing)
-        }
       
-      param_list_lower[8] = default_lower_bound_jump  # jump lower bound
-      param_list_upper[8] = default_upper_bound_jump  # jump upper bound
-      param_list_lower[10] = default_lower_bound_std_normal  # std_normal lower bound
-      param_list_upper[10] = default_upper_bound_std_normal  # std_normal upper bound     
-    
+    param_list_lower[8] <- default_lower_bound_jump  # jump lower bound
+    param_list_upper[8] <- default_upper_bound_jump  # jump upper bound
+    param_list_lower[10] <- default_lower_bound_std_normal  # std_normal lower bound
+    param_list_upper[10] <- default_upper_bound_std_normal  # std_normal upper bound     
+  
   }
     else {
-      stop("Optimizer {optimizer} not supported in this implementation so can't generate bounds")
+      stop(paste("Optimizer ", optimizer, " not supported in this implementation so can't generate bounds"))
     }
     
     #bounds_params = [(lower, upper) for lower, upper in zip(param_list_lower, param_list_upper)]
     #return bounds_params
   
-  bounds_params <- bind_rows(as.data.frame(param_list_lower), as.data.frame(param_list_upper))
+    #bounds_params <- bind_rows(as.data.frame(param_list_lower), as.data.frame(param_list_upper))
+    bounds_params <- itertools::izip(lower = param_list_lower, upper = param_list_lower)
+    return (bounds_params)
 }
 
 convert_dates_us_policies <- function(raw_date_str = "Not implemented") 

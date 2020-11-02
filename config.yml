@@ -1,0 +1,9 @@
+filepaths:
+  delphi_repo:
+     /delphi_repo
+  data_sandbox:
+     /data_sandbox/
+  danger_map:
+     /danger_map/
+  logs:
+     /logs/

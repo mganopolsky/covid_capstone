@@ -29,7 +29,7 @@ percentage_drift_upper_bound<-0.2
 default_lower_bound<-0.2
 percentage_drift_lower_bound<-0.2
 
-default_bounds_params<-c(
+default_bounds_params<-list(
   c(0.75, 1.25), c(-10, 10), c(1, 3), c(0.05, 0.5), c(0.01, 0.25), c(0, 0.5), c(0.1, 10), 
   c(0.1, 10), c(0, 5), c(0, 7), c(0.1, 5)
 )  # Bounds for the solver

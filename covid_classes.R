@@ -346,7 +346,7 @@ setMethod("create_datasets_with_confidence_intervals", "DELPHIDataCreator",
               cases_data_fit, #: list,
               deaths_data_fit, #: list,
               past_prediction_file = "I://covid19orc//danger_map//predicted//Global_V2_20200720.csv",
-              past_prediction_date = "2020-07-04",
+              past_prediction_date = as.Date("2020-07-04"),
               q = 0.5,
               ...)
     
@@ -839,608 +839,609 @@ setMethod("create_datasets_predictions_scenario", "DELPHIDataCreator",
       ))
     })
 
-get_aggregation_per_country <- function(df_predictions) 
-{
-        #Aggregates predictions at the country level from the predictions dataframe
-        #:param df_predictions: DELPHI predictions dataframe
-        #:return: DELPHI predictions dataframe aggregated at the country level
-        
-    #df_predictions = df_predictions[df_predictions["Province"] != "None"]
-    df_predictions <- df_predictions %>% filter(Province != "None")
-    #df_agg_country = df_predictions.groupby(["Continent", "Country", "Day"]).sum().reset_index()
-    #WHAT ARE WE SUMMARIZING HERE
-    df_agg_country <- df_predictions %>% group_by("Continent", "Country", "Day") %>% summarise(sum = sum())
-    df_agg_country["Province"] <- "None"
-    df_agg_country <- df_agg_country[names(df_predictions)]
-    df_agg_country
-}
-
-get_aggregation_per_continent <- function(df_predictions) 
-{
-  #       Aggregates predictions at the continent level from the predictions dataframe
-  #      :param df_predictions: DELPHI predictions dataframe
-  #      :return: DELPHI predictions dataframe aggregated at the continent level
-      
-  #df_agg_continent = df_predictions.groupby(["Continent", "Day"]).sum().reset_index()
-  df_agg_continent <- df_predictions %>% group_by("Continent", "Day") %>% summarize()
-  df_agg_continent["Country"] <- "None"
-  df_agg_continent["Province"] <- "None"
-  df_agg_continent <- df_agg_continent[names(df_predictions)]
-  df_agg_continent
-}
-
-get_aggregation_world <- function(df_predictions) 
-{
-  #Aggregates predictions at the world level from the predictions dataframe
-  #      :param df_predictions: DELPHI predictions dataframe
-  #      :return: DELPHI predictions dataframe aggregated at the world level (only one row in this dataframe)
-   
-  #df_agg_world = df_predictions.groupby("Day").sum().reset_index()
-  df_agg_world <-  df_predictions %>% group_by("Day") %>% summarise(sum())
-  df_agg_world["Continent"] <- "None"
-  df_agg_world["Country"] <- "None"
-  df_agg_world["Province"] <- "None"
-  df_agg_world <- df_agg_world[names(df_predictions)]
-  df_agg_world
-}
-
-append_all_aggregations <- function(df_predictions) {
-
-      # Creates and appends all the predictions' aggregations at the country, continent and world levels
-      #  :param df_predictions: dataframe with the raw predictions from DELPHI
-      #  :return: dataframe with raw predictions from DELPHI and aggregated ones at the country, continent & world levels
-       
-      df_agg_since_today_per_country <- get_aggregation_per_country( df_predictions )
-      df_agg_since_today_per_continent <- get_aggregation_per_continent(  df_predictions)
-      df_agg_since_today_world <- get_aggregation_world(df_predictions)
-      #df_predictions = pd.concat(
-      #  [
-      #    df_predictions,
-      #    df_agg_since_today_per_country,
-      #    df_agg_since_today_per_continent,
-      #    df_agg_since_today_world,
-      #    ]
-      #)
-      
-      df_predictions <- bind_rows(df_predictions,   df_agg_since_today_per_country, 
-                                  df_agg_since_today_per_continent,   df_agg_since_today_world,)
-      
-      
-      #df_predictions.sort_values(["Continent", "Country", "Province", "Day"], inplace=True)
-      df_predictions <- df_predictions %>% arrange("Continent", "Country", "Province", "Day")
-      df_predictions
-}
 
 
- get_aggregation_per_country_with_cf <- function(
-  df_predictions,  past_prediction_file =  "I://covid19orc//danger_map//predicted//Global_V2_20200720.csv",
-  past_prediction_date = "2020-07-04",   q  = 0.5) 
- {
-     #   Creates aggregations at the country level as well as associated confidence intervals
-    #    :param df_predictions: dataframe containing the raw predictions from the DELPHI model
-    #    :param past_prediction_file: past prediction file's path for CI generation
-    #    :param past_prediction_date: past prediction's date for CI generation
-    #    :param q: quantile used for the CIs
-    #    :return: dataframe with country level aggregated predictions & associated confidence intervals
-     
-      df_predictions <- df_predictions %>% filtere("Province" != "None")
-      #columns_without_bounds = [x for x in df_predictions.columns if ("LB" not in x) and ("UB" not in x)]
-      columns_without_bounds <- c()
-      for ( x in names(df_predictions)) {
-        if (str_count(x, pattern = "LB|LB") == 0 )
-          columns_without_bounds <- c(columns_without_bounds, x)
-      }
-      
-      #df_agg_country = df_predictions[columns_without_bounds].groupby(["Continent", "Country", "Day"]).sum(min_count = 1).reset_index()
-      df_agg_country <- df_predictions %>% group_by("Continent", "Country", "Day") %>%
-        summarize(sum = sum( na.rm = TRUE)) %>% select(columns_without_bounds)
-      
-    
-      df_agg_country["Province"] <- "None"
-      
-      df_agg_country <- df_agg_country[columns_without_bounds]
-      
-      #aggregated_countries = set(zip(df_agg_country["Country"],df_agg_country["Province"]))
-      
-      aggregated_countries <- df_agg_country %>% select(distinct(Country, Province))
-      
-      past_predictions = pd.read_csv(past_prediction_file)
-      
-      list_df_aggregated_countries = list()
-      #for country, province in aggregated_countries:
-      for(row in 1:nrow(aggregated_countries))  
-      {
-          country = aggregated_countries[row, "Country"]
-          province = aggregated_countries[row, "Province"]
-          #past_predictions_temp <- (past_predictions[(past_predictions['Day'] > past_prediction_date) & 
-          #                                          (past_predictions['Country'] == country) & (past_predictions['Province'] == province)]).sort_values("Day")
-          
-          past_predictions_temp <- past_predictions %>% 
-                filter(Day > past_prediction_date & Country == country & Province == province) %>%
-                    arrange(Day)
-      
-          #df_agg_country_temp = (df_agg_country[(df_agg_country['Country'] == country) & (df_agg_country['Province'] == province)]).sort_values("Day").reset_index(drop=True)
-          
-          df_agg_country_temp <- df_agg_country %>% filter(Country == country & Province == province) %>% arrange(Day)
-          
-          total_detected <- df_agg_country_temp['Total Detected'] 
-          total_detected_deaths <- df_agg_country_temp['Total Detected Deaths'] 
-          #            active_cases = df_agg_country_temp['Active'] 
-          #            active_hospitalized = df_agg_country_temp['Active Hospitalized'] 
-          #            cumulative_hospitalized = df_agg_country_temp['Cumulative Hospitalized'] 
-          #            active_ventilated = df_agg_country_temp['Active Ventilated'] 
-          cases_fit_data <- df_agg_country_temp['Total Detected True'] 
-          deaths_fit_data <- df_agg_country_temp['Total Detected Deaths True'] 
-          since_100_dates <- df_agg_country_temp['Day'] 
-          
-          #n_days_btw_today_since_100 = (datetime.now() - pd.to_datetime(min(since_100_dates))).days
-          
-          n_days_btw_today_since_100 <- as.numeric(difftime(Sys.Date()  , as.Date(since_100_dates), units = "days"))
-          
-          cases_fit_data_past <- c()
-          if (nrow(past_predictions_temp) > 0) {
-            #zip <- data.frame(since_100_dates, cases_fit_data)
-            #cases_fit_data_past = [y for x, y in zip(since_100_dates,cases_fit_data) if ((x > past_prediction_date) and (not np.isnan(y)))]
-            
-            cases_fit_data_past <- data.frame(x = since_100_dates, y = cases_fit_data) %>% 
-              filter(x > past_prediction_date & ! is.nan(y)) %>% select(y)
-            
-            
-            #deaths_fit_data_past = [y for x, y in zip(since_100_dates,deaths_fit_data) if ((x > past_prediction_date) and (not np.isnan(y)))]
-            
-            deaths_fit_data_past <- data.frame(x = since_100_dates, y = cases_fit_data) %>% filter(x > past_prediction_date & !is.nan(y)) %>% select(y)
-            
-            #total_detected_past = past_predictions_temp["Total Detected"].values[:len(cases_fit_data_past)]
-            
-            total_detected_past <- past_predictions_temp["Total Detected"][1:length(cases_fit_data_past)]
-            
-            #total_detected_deaths_past = past_predictions_temp["Total Detected Deaths"].values[:len(deaths_fit_data_past)]
-            
-            total_detected_deaths_past <- past_predictions_temp["Total Detected Deaths"][1:length(deaths_fit_data_past)]
-            
-            #residual_cases_lb = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(cases_fit_data_past,total_detected_past)])) * scipy.stats.norm.ppf(0.5 - q /2)
-            #residual_cases_ub = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(cases_fit_data_past,total_detected_past)])) * scipy.stats.norm.ppf(0.5 + q /2)
-            
-            rt_mn_sq_residual_cases <- data.frame(x=cases_fit_data_past, y=total_detected_past) %>% 
-                  summarise(s = sqrt(mean( (x-y)^2) )) %>% as.numeric()
-            
-            residual_cases_lb <- rt_mn_sq_residual_cases * qnorm(0.5 - q / 2)
-            residual_deaths_ub <- rt_mn_sq_residual_cases * qnorm(0.5 + q / 2)
-            
-            rt_mn_sq_death_cases <- data.frame(x=deaths_fit_data_past, y=total_detected_deaths_past) %>% 
-                  summarise(s = sqrt(mean( (x-y)^2) )) %>% as.numeric()
-          
-            #residual_deaths_lb = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(deaths_fit_data_past,total_detected_deaths_past)])) * scipy.stats.norm.ppf(0.5 - q /2)
-            #residual_deaths_ub = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(deaths_fit_data_past,total_detected_deaths_past)])) *  scipy.stats.norm.ppf(0.5 + q /2)
-            
-            residual_cases_lb <- rt_mn_sq_death_cases * qnorm(0.5 - q / 2)
-            residual_deaths_ub <- rt_mn_sq_death_cases * qnorm(0.5 + q / 2)
-            
-            
-                        
-            # Generation of the dataframe from the day since 100th case
-            df_predictions_since_100_cont_country_prov <- data.frame(
-              "Total Detected LB"= data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
-                mutate(max = max(as.integer(round(v + residual_cases_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max) 
-                ,
-              "Total Detected Deaths LB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
-                mutate(max = c( total_detected_deaths_LB, 
-                                max(as.integer(round(v + residual_deaths_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0))) 
-                ,
-              "Total Detected UB"= data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
-                mutate(max = max(as.integer(round(v + residual_cases_ub * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max) 
-                ,
-              "Total Detected Deaths UB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
-                mutate(max = c( total_detected_deaths_LB, 
-                                max(as.integer(round(v + residual_deaths_ub * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0))) 
-            )
-                            
-          #df_agg_country_temp = pd.concat([df_agg_country_temp, df_predictions_since_100_cont_country_prov], axis = 1)
-          
-          df_agg_country_temp <- bind_rows(df_agg_country_temp, df_predictions_since_100_cont_country_prov)
-        } 
-        else
-        {
-            df_predictions_since_100_cont_country_prov <- data.frame(
-              "Total Detected LB" = rep(NaN, nrow(df_agg_country_temp) ),  #: [np.nan for _ in range(len(df_agg_country_temp))],  
-              "Total Detected Deaths LB" = rep(NaN, nrow(df_agg_country_temp) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
-              "Total Detected UB"  = rep(NaN, nrow(df_agg_country_temp) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
-              "Total Detected Deaths UB"  = rep(NaN, nrow(df_agg_country_temp) )   #:  [np.nan for _ in range(len(df_agg_country_temp))]
-            )
-            #df_agg_country_temp = pd.concat([df_agg_country_temp, df_predictions_since_100_cont_country_prov], axis = 1)
-            df_agg_country_temp <- bind_rows(df_agg_country_temp, df_predictions_since_100_cont_country_prov)
-        }
-      
-        list_df_aggregated_countries.append(df_agg_country_temp)
-      }
-      
-    df_agg_country_final <- data.frame()
-    
-    for (i in list_df_aggregated_countries) {
-      df_agg_country_final <- bind_rows(df_agg_country_final, i)
-    }
-      
-    df_agg_country_final 
-  }
-      
-  get_aggregation_per_continent_with_cf <- function(
-        df_predictions,
-        past_prediction_file  = "I://covid19orc//danger_map//predicted//Global_V2_20200720.csv",
-        past_prediction_date  = "2020-07-04",
-        q = 0.5
-      ) 
-    {
-        #Creates aggregations at the continent level as well as associated confidence intervals
-        #param df_predictions: dataframe containing the raw predictions from the DELPHI model
-        #param past_prediction_file: past prediction file's path for CI generation
-        #param past_prediction_date: past prediction's date for CI generation
-        #param q: quantile used for the CIs
-        #return: dataframe with continent level aggregated predictions & associated confidence intervals
-        
-      #columns_without_bounds = [x for x in df_predictions.columns if ("LB" not in x) and ("UB" not in x)]
-      
-      columns_without_bounds <- c()
-      for ( x in names(df_predictions)) {
-        if (str_count(x, pattern = "LB|LB") == 0 )
-          columns_without_bounds <- c(columns_without_bounds, x)
-      }
-      
-      df_agg_continent <- df_predictions[columns_without_bounds] %>%
-        group_by(Continent, Day) %>% summarize(sum(min_count = 1))  #.reset_index()
-      df_agg_continent["Country"] <- "None"
-      df_agg_continent["Province"] <- "None"
-      df_agg_continent <- df_agg_continent[columns_without_bounds]
-      
-      #aggregated_continents = set(zip(df_agg_continent["Continent"], df_agg_continent["Country"],df_agg_continent["Province"]))
-      
-      aggregated_continents <- data.frame(df_agg_continent["Continent"],
-                                          df_agg_continent["Country"],
-                                          df_agg_continent["Province"])
-      
-      past_predictions <- read_csv(past_prediction_file)
-      list_df_aggregated_continents = list()
-      
-      #for continent, country, province in aggregated_continents{
-      #  past_predictions_temp = (past_predictions[(past_predictions['Day'] > past_prediction_date)   & (past_predictions['Continent'] == continent)   & 
-      #                                              (past_predictions['Country'] == country) &  (past_predictions['Country'] == province)]).sort_values("Day")}
-      
-      
-      for(i in 1:nrow(aggregated_continents)) 
-      {
-      
-        continent <- aggregated_continents[i]$Continent
-        country <- aggregated_continents[i]$Country
-        province <- aggregated_continents[i]$Province
-        past_predictions_temp <- past_predictions %>% 
-              filter(Day > past_prediction_date & Continent == continent & 
-                       Country == country & Country == province) %>%  arrange(Day)
-            
-            #df_agg_continent_temp = (df_agg_continent[(df_agg_continent['Continent'] == continent)]).sort_values("Day").reset_index(drop=True)
-            
-            df_agg_continent_temp <- df_agg_continent %>% filter('Continent' == continent) %>% arrange(Day)
-            
-            total_detected <- df_agg_continent_temp['Total Detected'] 
-            total_detected_deaths <- df_agg_continent_temp['Total Detected Deaths'] 
-           
-            cases_fit_data <- df_agg_continent_temp['Total Detected True'] 
-            deaths_fit_data <- df_agg_continent_temp['Total Detected Deaths True'] 
-            since_100_dates <- df_agg_continent_temp['Day']   
-            #n_days_btw_today_since_100 = (datetime.now() - pd.to_datetime(min(since_100_dates))).days
-            n_days_btw_today_since_100 <- format(Sys.Date()  - as.datetime(since_100_dates), units = "days")
-            
-            if (nrows(past_predictions_temp) > 0)
+DELPHIAggregations <- setRefClass("DELPHIAggregations",
+         methods = list(
+           get_aggregation_per_country = function(df_predictions) 
+           {
+             #Aggregates predictions at the country level from the predictions dataframe
+             #:param df_predictions: DELPHI predictions dataframe
+             #:return: DELPHI predictions dataframe aggregated at the country level
+             
+             #df_predictions = df_predictions[df_predictions["Province"] != "None"]
+             df_predictions <- df_predictions %>% filter(Province != "None")
+             #df_agg_country = df_predictions.groupby(["Continent", "Country", "Day"]).sum().reset_index()
+             #WHAT ARE WE SUMMARIZING HERE
+             df_agg_country <- df_predictions %>% group_by("Continent", "Country", "Day") %>% summarise(sum = sum())
+             df_agg_country["Province"] <- "None"
+             df_agg_country <- df_agg_country[names(df_predictions)]
+             df_agg_country
+           },
+           get_aggregation_per_continent = function(df_predictions) 
+           {
+             #       Aggregates predictions at the continent level from the predictions dataframe
+             #      :param df_predictions: DELPHI predictions dataframe
+             #      :return: DELPHI predictions dataframe aggregated at the continent level
+             
+             #df_agg_continent = df_predictions.groupby(["Continent", "Day"]).sum().reset_index()
+             df_agg_continent <- df_predictions %>% group_by("Continent", "Day") %>% summarize()
+             df_agg_continent["Country"] <- "None"
+             df_agg_continent["Province"] <- "None"
+             df_agg_continent <- df_agg_continent[names(df_predictions)]
+             df_agg_continent
+           },
+           get_aggregation_world = function(df_predictions) 
+           {
+             #       Aggregates predictions at the continent level from the predictions dataframe
+             #      :param df_predictions: DELPHI predictions dataframe
+             #      :return: DELPHI predictions dataframe aggregated at the continent level
+             
+             #df_agg_continent = df_predictions.groupby(["Continent", "Day"]).sum().reset_index()
+             df_agg_continent <- df_predictions %>% group_by("Continent", "Day") %>% summarize()
+             df_agg_continent["Country"] <- "None"
+             df_agg_continent["Province"] <- "None"
+             df_agg_continent <- df_agg_continent[names(df_predictions)]
+             df_agg_continent
+           },
+           append_all_aggregations = function(df_predictions) 
+             {
+             
+             # Creates and appends all the predictions' aggregations at the country, continent and world levels
+             #  :param df_predictions: dataframe with the raw predictions from DELPHI
+             #  :return: dataframe with raw predictions from DELPHI and aggregated ones at the country, continent & world levels
+             
+             df_agg_since_today_per_country <- get_aggregation_per_country( df_predictions )
+             df_agg_since_today_per_continent <- get_aggregation_per_continent(  df_predictions)
+             df_agg_since_today_world <- get_aggregation_world(df_predictions)
+             #df_predictions = pd.concat(
+             #  [
+             #    df_predictions,
+             #    df_agg_since_today_per_country,
+             #    df_agg_since_today_per_continent,
+             #    df_agg_since_today_world,
+             #    ]
+             #)
+             
+             df_predictions <- bind_rows(df_predictions,   df_agg_since_today_per_country, 
+                                         df_agg_since_today_per_continent,   df_agg_since_today_world,)
+             
+             
+             #df_predictions.sort_values(["Continent", "Country", "Province", "Day"], inplace=True)
+             df_predictions <- df_predictions %>% arrange("Continent", "Country", "Province", "Day")
+             return(df_predictions)
+           },
+           get_aggregation_per_country_with_cf = function(
+             df_predictions,  past_prediction_file =  "I://covid19orc//danger_map//predicted//Global_V2_20200720.csv",
+             past_prediction_date = "2020-07-04",   q  = 0.5) 
+           {
+             #   Creates aggregations at the country level as well as associated confidence intervals
+             #    :param df_predictions: dataframe containing the raw predictions from the DELPHI model
+             #    :param past_prediction_file: past prediction file's path for CI generation
+             #    :param past_prediction_date: past prediction's date for CI generation
+             #    :param q: quantile used for the CIs
+             #    :return: dataframe with country level aggregated predictions & associated confidence intervals
+             
+             df_predictions <- df_predictions %>% filtere("Province" != "None")
+             #columns_without_bounds = [x for x in df_predictions.columns if ("LB" not in x) and ("UB" not in x)]
+             columns_without_bounds <- c()
+             for ( x in names(df_predictions)) {
+               if (str_count(x, pattern = "LB|LB") == 0 )
+                 columns_without_bounds <- c(columns_without_bounds, x)
+             }
+             
+             #df_agg_country = df_predictions[columns_without_bounds].groupby(["Continent", "Country", "Day"]).sum(min_count = 1).reset_index()
+             df_agg_country <- df_predictions %>% group_by("Continent", "Country", "Day") %>%
+               summarize(sum = sum( na.rm = TRUE)) %>% select(columns_without_bounds)
+             
+             
+             df_agg_country["Province"] <- "None"
+             
+             df_agg_country <- df_agg_country[columns_without_bounds]
+             
+             #aggregated_countries = set(zip(df_agg_country["Country"],df_agg_country["Province"]))
+             
+             aggregated_countries <- df_agg_country %>% select(distinct(Country, Province))
+             
+             past_predictions = pd.read_csv(past_prediction_file)
+             
+             list_df_aggregated_countries = list()
+             #for country, province in aggregated_countries:
+             for(row in 1:nrow(aggregated_countries))  
+             {
+               country = aggregated_countries[row, "Country"]
+               province = aggregated_countries[row, "Province"]
+               #past_predictions_temp <- (past_predictions[(past_predictions['Day'] > past_prediction_date) & 
+               #                                          (past_predictions['Country'] == country) & (past_predictions['Province'] == province)]).sort_values("Day")
+               
+               past_predictions_temp <- past_predictions %>% 
+                 filter(Day > past_prediction_date & Country == country & Province == province) %>%
+                 arrange(Day)
+               
+               #df_agg_country_temp = (df_agg_country[(df_agg_country['Country'] == country) & (df_agg_country['Province'] == province)]).sort_values("Day").reset_index(drop=True)
+               
+               df_agg_country_temp <- df_agg_country %>% filter(Country == country & Province == province) %>% arrange(Day)
+               
+               total_detected <- df_agg_country_temp['Total Detected'] 
+               total_detected_deaths <- df_agg_country_temp['Total Detected Deaths'] 
+               #            active_cases = df_agg_country_temp['Active'] 
+               #            active_hospitalized = df_agg_country_temp['Active Hospitalized'] 
+               #            cumulative_hospitalized = df_agg_country_temp['Cumulative Hospitalized'] 
+               #            active_ventilated = df_agg_country_temp['Active Ventilated'] 
+               cases_fit_data <- df_agg_country_temp['Total Detected True'] 
+               deaths_fit_data <- df_agg_country_temp['Total Detected Deaths True'] 
+               since_100_dates <- df_agg_country_temp['Day'] 
+               
+               #n_days_btw_today_since_100 = (datetime.now() - pd.to_datetime(min(since_100_dates))).days
+               
+               n_days_btw_today_since_100 <- as.numeric(difftime(Sys.Date()  , as.Date(since_100_dates), units = "days"))
+               
+               cases_fit_data_past <- c()
+               if (nrow(past_predictions_temp) > 0) {
+                 #zip <- data.frame(since_100_dates, cases_fit_data)
+                 #cases_fit_data_past = [y for x, y in zip(since_100_dates,cases_fit_data) if ((x > past_prediction_date) and (not np.isnan(y)))]
+                 
+                 cases_fit_data_past <- data.frame(x = since_100_dates, y = cases_fit_data) %>% 
+                   filter(x > past_prediction_date & ! is.nan(y)) %>% select(y)
+                 
+                 
+                 #deaths_fit_data_past = [y for x, y in zip(since_100_dates,deaths_fit_data) if ((x > past_prediction_date) and (not np.isnan(y)))]
+                 
+                 deaths_fit_data_past <- data.frame(x = since_100_dates, y = cases_fit_data) %>% filter(x > past_prediction_date & !is.nan(y)) %>% select(y)
+                 
+                 #total_detected_past = past_predictions_temp["Total Detected"].values[:len(cases_fit_data_past)]
+                 
+                 total_detected_past <- past_predictions_temp["Total Detected"][1:length(cases_fit_data_past)]
+                 
+                 #total_detected_deaths_past = past_predictions_temp["Total Detected Deaths"].values[:len(deaths_fit_data_past)]
+                 
+                 total_detected_deaths_past <- past_predictions_temp["Total Detected Deaths"][1:length(deaths_fit_data_past)]
+                 
+                 #residual_cases_lb = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(cases_fit_data_past,total_detected_past)])) * scipy.stats.norm.ppf(0.5 - q /2)
+                 #residual_cases_ub = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(cases_fit_data_past,total_detected_past)])) * scipy.stats.norm.ppf(0.5 + q /2)
+                 
+                 rt_mn_sq_residual_cases <- data.frame(x=cases_fit_data_past, y=total_detected_past) %>% 
+                   summarise(s = sqrt(mean( (x-y)^2) )) %>% as.numeric()
+                 
+                 residual_cases_lb <- rt_mn_sq_residual_cases * qnorm(0.5 - q / 2)
+                 residual_deaths_ub <- rt_mn_sq_residual_cases * qnorm(0.5 + q / 2)
+                 
+                 rt_mn_sq_death_cases <- data.frame(x=deaths_fit_data_past, y=total_detected_deaths_past) %>% 
+                   summarise(s = sqrt(mean( (x-y)^2) )) %>% as.numeric()
+                 
+                 #residual_deaths_lb = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(deaths_fit_data_past,total_detected_deaths_past)])) * scipy.stats.norm.ppf(0.5 - q /2)
+                 #residual_deaths_ub = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(deaths_fit_data_past,total_detected_deaths_past)])) *  scipy.stats.norm.ppf(0.5 + q /2)
+                 
+                 residual_cases_lb <- rt_mn_sq_death_cases * qnorm(0.5 - q / 2)
+                 residual_deaths_ub <- rt_mn_sq_death_cases * qnorm(0.5 + q / 2)
+                 
+                 
+                 
+                 # Generation of the dataframe from the day since 100th case
+                 df_predictions_since_100_cont_country_prov <- data.frame(
+                   "Total Detected LB"= data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
+                     mutate(max = max(as.integer(round(v + residual_cases_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max) 
+                   ,
+                   "Total Detected Deaths LB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
+                     mutate(max = c( total_detected_deaths_LB, 
+                                     max(as.integer(round(v + residual_deaths_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0))) 
+                   ,
+                   "Total Detected UB"= data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
+                     mutate(max = max(as.integer(round(v + residual_cases_ub * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max) 
+                   ,
+                   "Total Detected Deaths UB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
+                     mutate(max = c( total_detected_deaths_LB, 
+                                     max(as.integer(round(v + residual_deaths_ub * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0))) 
+                 )
+                 
+                 #df_agg_country_temp = pd.concat([df_agg_country_temp, df_predictions_since_100_cont_country_prov], axis = 1)
+                 
+                 df_agg_country_temp <- bind_rows(df_agg_country_temp, df_predictions_since_100_cont_country_prov)
+               } 
+               else
+               {
+                 df_predictions_since_100_cont_country_prov <- data.frame(
+                   "Total Detected LB" = rep(NaN, nrow(df_agg_country_temp) ),  #: [np.nan for _ in range(len(df_agg_country_temp))],  
+                   "Total Detected Deaths LB" = rep(NaN, nrow(df_agg_country_temp) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
+                   "Total Detected UB"  = rep(NaN, nrow(df_agg_country_temp) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
+                   "Total Detected Deaths UB"  = rep(NaN, nrow(df_agg_country_temp) )   #:  [np.nan for _ in range(len(df_agg_country_temp))]
+                 )
+                 #df_agg_country_temp = pd.concat([df_agg_country_temp, df_predictions_since_100_cont_country_prov], axis = 1)
+                 df_agg_country_temp <- bind_rows(df_agg_country_temp, df_predictions_since_100_cont_country_prov)
+               }
+               
+               list_df_aggregated_countries.append(df_agg_country_temp)
+             }
+             
+             df_agg_country_final <- data.frame()
+             
+             for (i in list_df_aggregated_countries) {
+               df_agg_country_final <- bind_rows(df_agg_country_final, i)
+             }
+             
+             df_agg_country_final 
+           },
+           get_aggregation_per_continent_with_cf = function(
+             df_predictions,
+             past_prediction_file  = "I://covid19orc//danger_map//predicted//Global_V2_20200720.csv",
+             past_prediction_date  = "2020-07-04",
+             q = 0.5) 
+           {
+             #Creates aggregations at the continent level as well as associated confidence intervals
+             #param df_predictions: dataframe containing the raw predictions from the DELPHI model
+             #param past_prediction_file: past prediction file's path for CI generation
+             #param past_prediction_date: past prediction's date for CI generation
+             #param q: quantile used for the CIs
+             #return: dataframe with continent level aggregated predictions & associated confidence intervals
+             
+             #columns_without_bounds = [x for x in df_predictions.columns if ("LB" not in x) and ("UB" not in x)]
+             
+             columns_without_bounds <- c()
+             for ( x in names(df_predictions)) {
+               if (str_count(x, pattern = "LB|LB") == 0 )
+                 columns_without_bounds <- c(columns_without_bounds, x)
+             }
+             
+             df_agg_continent <- df_predictions[columns_without_bounds] %>%
+               group_by(Continent, Day) %>% summarize(sum(min_count = 1))  #.reset_index()
+             df_agg_continent["Country"] <- "None"
+             df_agg_continent["Province"] <- "None"
+             df_agg_continent <- df_agg_continent[columns_without_bounds]
+             
+             #aggregated_continents = set(zip(df_agg_continent["Continent"], df_agg_continent["Country"],df_agg_continent["Province"]))
+             
+             aggregated_continents <- data.frame(df_agg_continent["Continent"],
+                                                 df_agg_continent["Country"],
+                                                 df_agg_continent["Province"])
+             
+             past_predictions <- read_csv(past_prediction_file)
+             list_df_aggregated_continents = list()
+             
+             #for continent, country, province in aggregated_continents{
+             #  past_predictions_temp = (past_predictions[(past_predictions['Day'] > past_prediction_date)   & (past_predictions['Continent'] == continent)   & 
+             #                                              (past_predictions['Country'] == country) &  (past_predictions['Country'] == province)]).sort_values("Day")}
+             
+             
+             for(i in 1:nrow(aggregated_continents)) 
+             {
+               
+               continent <- aggregated_continents[i]$Continent
+               country <- aggregated_continents[i]$Country
+               province <- aggregated_continents[i]$Province
+               past_predictions_temp <- past_predictions %>% 
+                 filter(Day > past_prediction_date & Continent == continent & 
+                          Country == country & Country == province) %>%  arrange(Day)
+               
+               #df_agg_continent_temp = (df_agg_continent[(df_agg_continent['Continent'] == continent)]).sort_values("Day").reset_index(drop=True)
+               
+               df_agg_continent_temp <- df_agg_continent %>% filter('Continent' == continent) %>% arrange(Day)
+               
+               total_detected <- df_agg_continent_temp['Total Detected'] 
+               total_detected_deaths <- df_agg_continent_temp['Total Detected Deaths'] 
+               
+               cases_fit_data <- df_agg_continent_temp['Total Detected True'] 
+               deaths_fit_data <- df_agg_continent_temp['Total Detected Deaths True'] 
+               since_100_dates <- df_agg_continent_temp['Day']   
+               #n_days_btw_today_since_100 = (datetime.now() - pd.to_datetime(min(since_100_dates))).days
+               n_days_btw_today_since_100 <- format(Sys.Date()  - as.datetime(since_100_dates), units = "days")
+               
+               if (nrows(past_predictions_temp) > 0)
+               {
+                 #cases_fit_data_past = [y for x, y in zip(since_100_dates,cases_fit_data) if ((x > past_prediction_date) and (not np.isnan(y)))]
+                 
+                 cases_fit_data_past <- as.data.frame(x = since_100_dates, y = cases_fit_data) %>% 
+                   filter(x > past_prediction_date & !is.nan(y)) %>% select(y)
+                 
+                 #deaths_fit_data_past = [y for x, y in zip(since_100_dates,deaths_fit_data) if ((x > past_prediction_date) and (not np.isnan(y)))]
+                 
+                 
+                 deaths_fit_data_past <- as.data.frame(x = since_100_dates, y = deaths_fit_data) %>% 
+                   filter(x > past_prediction_date & !is.nan(y)) %>% select(y)
+                 
+                 #total_detected_past = past_predictions_temp["Total Detected"].values[:len(cases_fit_data_past)]
+                 
+                 total_detected_past <- past_predictions_temp["Total Detected"][1:length(cases_fit_data_past)]
+                 
+                 #total_detected_deaths_past = past_predictions_temp["Total Detected Deaths"].values[:len(deaths_fit_data_past)]
+                 
+                 total_detected_deaths_past <- past_predictions_temp["Total Detected Deaths"][1:length(deaths_fit_data_past)]
+                 
+                 
+                 #residual_cases_lb = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(cases_fit_data_past,total_detected_past)])) * scipy.stats.norm.ppf(0.5 - q /2)
+                 #residual_cases_ub = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(cases_fit_data_past,total_detected_past)])) * scipy.stats.norm.ppf(0.5 + q /2)
+                 #residual_deaths_lb = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(deaths_fit_data_past,total_detected_deaths_past)])) * scipy.stats.norm.ppf(0.5 - q /2)
+                 #residual_deaths_ub = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(deaths_fit_data_past,total_detected_deaths_past)])) *  scipy.stats.norm.ppf(0.5 + q /2)
+                 
+                 rt_mn_sq_residual_cases <- data.frame(x=cases_fit_data_past, y=total_detected_past) %>% 
+                   summarise(s = sqrt(mean( (x-y)^2) )) %>% as.numeric()
+                 
+                 residual_cases_lb <- rt_mn_sq_residual_cases * qnorm(0.5 - q / 2)
+                 residual_deaths_ub <- rt_mn_sq_residual_cases * qnorm(0.5 + q / 2)
+                 
+                 rt_mn_sq_death_cases <- data.frame(x=deaths_fit_data_past, y=total_detected_deaths_past) %>% 
+                   summarise(s = sqrt(mean( (x-y)^2) )) %>% as.numeric()
+                 
+                 residual_cases_lb <- rt_mn_sq_death_cases * qnorm(0.5 - q / 2)
+                 residual_deaths_ub <- rt_mn_sq_death_cases * qnorm(0.5 + q / 2)
+                 
+                 # Generation of the dataframe from the day since 100th cas
+                 
+                 df_predictions_since_100_cont_country_prov <- data.frame(
+                   "Total Detected LB"= data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
+                     mutate(max = max(as.integer(round(v + residual_cases_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max) 
+                   ,
+                   "Total Detected Deaths LB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
+                     mutate(max = c( total_detected_deaths_LB, 
+                                     max(as.integer(round(v + residual_deaths_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0))) 
+                   ,
+                   "Total Detected UB"= data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
+                     mutate(max = max(as.integer(round(v + residual_cases_ub * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max) 
+                   ,
+                   "Total Detected Deaths UB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
+                     mutate(max = c( total_detected_deaths_LB, 
+                                     max(as.integer(round(v + residual_deaths_ub * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0))) 
+                 )
+                 
+                 df_agg_continent_temp <- bind_rows(df_agg_continent_temp, df_predictions_since_100_cont_country_prov)
+                 
+                 #df_agg_continent_temp = pd.concat([df_agg_continent_temp, df_predictions_since_100_cont_country_prov], axis = 1)
+               }
+               else 
+               {
+                 
+                 df_predictions_since_100_cont_country_prov <- data.frame(
+                   "Total Detected LB" = rep(NaN, nrow(df_agg_continent_temp) ),  #: [np.nan for _ in range(len(df_agg_country_temp))],  
+                   "Total Detected Deaths LB" = rep(NaN, nrow(df_agg_continent_temp) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
+                   "Total Detected UB"  = rep(NaN, nrow(df_agg_continent_temp) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
+                   "Total Detected Deaths UB"  = rep(NaN, nrow(df_agg_continent_temp) )   #:  [np.nan for _ in range(len(df_agg_country_temp))]
+                 )
+                 #df_agg_country_temp = pd.concat([df_agg_country_temp, df_predictions_since_100_cont_country_prov], axis = 1)
+                 df_agg_continent_temp <- bind_rows(df_agg_continent_temp, df_predictions_since_100_cont_country_prov)
+               }  
+               
+               list_df_aggregated_continents.append(df_agg_continent_temp)
+             }
+             
+             df_agg_continent_final <- data.frame()
+             
+             for (i in list_df_aggregated_continents.append) {
+               df_agg_continent_final <- bind_rows(df_agg_continent_final, i)
+             }
+             
+             df_agg_continent_final 
+           },
+             get_aggregation_world_with_cf <- function(
+              df_predictions ,  past_prediction_file  = "I://covid19orc//danger_map//predicted//Global_V2_20200720.csv",
+              past_prediction_date  = as.Date("2020-07-04"),
+              q  = 0.5
+            ) 
             {
-              #cases_fit_data_past = [y for x, y in zip(since_100_dates,cases_fit_data) if ((x > past_prediction_date) and (not np.isnan(y)))]
+                  #Creates aggregations at the world level as well as associated confidence intervals
+                  #:param df_predictions: dataframe containing the raw predictions from the DELPHI model
+                  #:param past_prediction_file: past prediction file's path for CI generation
+                  #:param past_prediction_date: past prediction's date for CI generation
+                  #:param q: quantile used for the CIs
+                  #:return: dataframe with continent world aggregated predictions & associated confidence intervals
+                
+                #columns_without_bounds = [x for x in df_predictions.columns if ("LB" not in x) and ("UB" not in x)]
+                
+                columns_without_bounds <- c()
+                for ( x in names(df_predictions)) {
+                  if (str_count(x, pattern = "LB|LB") == 0 )
+                    columns_without_bounds <- c(columns_without_bounds, x)
+                }
+                
+                #df_agg_world = df_predictions[columns_without_bounds].groupby(["Day"]).sum(min_count = 1).reset_index()
+                
+                df_agg_world <- df_predictions[columns_without_bounds] %>% group_by(Day) %>% summarise(sum = sum())
+                
+                
+                df_agg_world["Continent"] <- "None"
+                df_agg_world["Country"] <- "None"
+                df_agg_world["Province"] <- "None"
+                df_agg_world <- df_agg_world[columns_without_bounds]
+                
+                past_predictions <- read_csv(past_prediction_file)
+                
+                #past_predictions_temp = (past_predictions[(past_predictions['Day'] > past_prediction_date) &  (past_predictions['Continent'] == "None") & (past_predictions['Country'] == "None")   & (past_predictions['Province'] == "None")]).sort_values("Day")
+                
+                past_predictions_temp <- past_predictions %>% filter(Day > past_prediction_date & Continent == "None" & Country == "None" & Province == "None") %>%
+                    arrange(Day)
+                
+                total_detected <- df_agg_world['Total Detected'] 
+                total_detected_deaths <- df_agg_world['Total Detected Deaths'] 
               
-              cases_fit_data_past <- as.data.frame(x = since_100_dates, y = cases_fit_data) %>% 
-                filter(x > past_prediction_date & !is.nan(y)) %>% select(y)
-              
-              #deaths_fit_data_past = [y for x, y in zip(since_100_dates,deaths_fit_data) if ((x > past_prediction_date) and (not np.isnan(y)))]
-              
-              
-              deaths_fit_data_past <- as.data.frame(x = since_100_dates, y = deaths_fit_data) %>% 
-                filter(x > past_prediction_date & !is.nan(y)) %>% select(y)
-              
-              #total_detected_past = past_predictions_temp["Total Detected"].values[:len(cases_fit_data_past)]
-              
-              total_detected_past <- past_predictions_temp["Total Detected"][1:length(cases_fit_data_past)]
-              
-              #total_detected_deaths_past = past_predictions_temp["Total Detected Deaths"].values[:len(deaths_fit_data_past)]
-              
-              total_detected_deaths_past <- past_predictions_temp["Total Detected Deaths"][1:length(deaths_fit_data_past)]
-              
-              
-              #residual_cases_lb = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(cases_fit_data_past,total_detected_past)])) * scipy.stats.norm.ppf(0.5 - q /2)
-              #residual_cases_ub = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(cases_fit_data_past,total_detected_past)])) * scipy.stats.norm.ppf(0.5 + q /2)
-              #residual_deaths_lb = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(deaths_fit_data_past,total_detected_deaths_past)])) * scipy.stats.norm.ppf(0.5 - q /2)
-              #residual_deaths_ub = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(deaths_fit_data_past,total_detected_deaths_past)])) *  scipy.stats.norm.ppf(0.5 + q /2)
-              
-              rt_mn_sq_residual_cases <- data.frame(x=cases_fit_data_past, y=total_detected_past) %>% 
-                summarise(s = sqrt(mean( (x-y)^2) )) %>% as.numeric()
-              
-              residual_cases_lb <- rt_mn_sq_residual_cases * qnorm(0.5 - q / 2)
-              residual_deaths_ub <- rt_mn_sq_residual_cases * qnorm(0.5 + q / 2)
-              
-              rt_mn_sq_death_cases <- data.frame(x=deaths_fit_data_past, y=total_detected_deaths_past) %>% 
-                summarise(s = sqrt(mean( (x-y)^2) )) %>% as.numeric()
+                cases_fit_data <- df_agg_world['Total Detected True'] 
+                deaths_fit_data <- df_agg_world['Total Detected Deaths True'] 
+                since_100_dates <- df_agg_world['Day']   
+                
+                #n_days_btw_today_since_100 = (datetime.now() - pd.to_datetime(min(since_100_dates))).days
+                
+                n_days_btw_today_since_100 <- as.numeric(difftime(Sys.Date()  , n_days_btw_today_since_100, units = "days"))
+                
+                
+                if (nrow(past_predictions_temp) > 0) 
+                {
+                    cases_fit_data_past <- as.data.frame(x = since_100_dates, y = cases_fit_data) %>% 
+                          filter(x > past_prediction_date & !is.nan(y)) %>% select(y)
+                    deaths_fit_data_past <- as.data.frame(x = since_100_dates, y = deaths_fit_data) %>% 
+                      filter(x > past_prediction_date & !is.nan(y)) %>% select(y)
+                    total_detected_past <- past_predictions_temp["Total Detected"][1:length(cases_fit_data_past)]
+                    total_detected_deaths_past <- past_predictions_temp["Total Detected Deaths"][1:length(deaths_fit_data_past)]
+                    
+                    #residual_cases_lb = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(cases_fit_data_past,total_detected_past)])) * scipy.stats.norm.ppf(0.5 - q /2)
+                    #residual_cases_ub = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(cases_fit_data_past,total_detected_past)])) * scipy.stats.norm.ppf(0.5 + q /2)
+                    #residual_deaths_lb = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(deaths_fit_data_past,total_detected_deaths_past)])) * scipy.stats.norm.ppf(0.5 - q /2)
+                    #residual_deaths_ub = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(deaths_fit_data_past,total_detected_deaths_past)])) *  scipy.stats.norm.ppf(0.5 + q /2)
+                
+                    
+                    rt_mn_sq_residual_cases <- data.frame(x=cases_fit_data_past, y=total_detected_past) %>% 
+                      summarise(s = sqrt(mean( (x-y)^2) )) %>% as.numeric()
+                    
+                    residual_cases_lb <- rt_mn_sq_residual_cases * qnorm(0.5 - q / 2)
+                    residual_deaths_ub <- rt_mn_sq_residual_cases * qnorm(0.5 + q / 2)
+                    
+                    rt_mn_sq_death_cases <- data.frame(x=deaths_fit_data_past, y=total_detected_deaths_past) %>% 
+                      summarise(s = sqrt(mean( (x-y)^2) )) %>% as.numeric()
+                    
+                    residual_cases_lb <- rt_mn_sq_death_cases * qnorm(0.5 - q / 2)
+                    residual_deaths_ub <- rt_mn_sq_death_cases * qnorm(0.5 + q / 2)
+                    
+                    
+                    
+                    # Generation of the dataframe from the day since 100th case
+                    df_predictions_since_100_cont_country_prov < data.frame(
+                      "Total Detected LB" = data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
+                        mutate(max = max(as.integer(round(v + residual_cases_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max), 
+                      "Total Detected Deaths LB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
+                        mutate(max = c( total_detected_deaths_LB, 
+                                        max(as.integer(round(v + residual_deaths_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0))) ,
+                      "Total Detected UB"= data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
+                        mutate(max = max(as.integer(round(v + residual_cases_ub * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max) ,
+                      "Total Detected Deaths UB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
+                        mutate(max = c( total_detected_deaths_LB, 
+                                        max(as.integer(round(v + residual_deaths_ub * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0))) 
+                    )
+                    
+                    #df_agg_world_final = pd.concat([df_agg_world, df_predictions_since_100_cont_country_prov], axis = 1)
+                    #df_agg_world_final <- bind_rows(df_agg_world, df_predictions_since_100_cont_country_prov)
+                }
+                else
+                {
+                  
+                  df_predictions_since_100_cont_country_prov <- data.frame(
+                    "Total Detected LB" = rep(NaN, nrow(df_agg_world) ),  #: [np.nan for _ in range(len(df_agg_country_temp))],  
+                    "Total Detected Deaths LB" = rep(NaN, nrow(df_agg_world) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
+                    "Total Detected UB"  = rep(NaN, nrow(df_agg_world) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
+                    "Total Detected Deaths UB"  = rep(NaN, nrow(df_agg_world) )   #:  [np.nan for _ in range(len(df_agg_country_temp))]
+                  )
+                }
+                df_agg_world_final <- bind_rows(df_agg_world, df_predictions_since_100_cont_country_prov)
+                
+                df_agg_world_final     
+            },
+           append_all_aggregations_cf <- function(
+            df_predictions, past_prediction_file = "I://covid19orc//danger_map//predicted//Global_V2_20200720.csv",
+            past_prediction_date = as.Date("2020-07-04"),
+            q = 0.5   ) 
+            {
+             #Creates and appends all the predictions' aggregations & Confidnece Intervals at the country, continent and  world levels
+              #        :param df_predictions: dataframe with the raw predictions from DELPHI
+              #        :param past_prediction_file: past prediction file's path for CI generation
+              #        :param past_prediction_date: past prediction's date for CI generation
+              #        :param q: quantile used for the CIs
+              #        :return: dataframe with predictions raw from DELPHI and aggregated ones, as well as associated confidence
+              #        intervals at the country, continent & world levels
+               
+                df_agg_since_today_per_country <- DELPHIAggregations.get_aggregation_per_country_with_cf(
+                  df_predictions=df_predictions,
+                  past_prediction_file=past_prediction_file,
+                  past_prediction_date=past_prediction_date,
+                  q=q
+                )
+                df_agg_since_today_per_continent = DELPHIAggregations.get_aggregation_per_continent_with_cf(
+                  df_predictions=df_predictions,
+                  past_prediction_file=past_prediction_file,
+                  past_prediction_date=past_prediction_date,
+                  q=q
+                )
+                df_agg_since_today_world = DELPHIAggregations.get_aggregation_world_with_cf(
+                  df_predictions=df_predictions,
+                  past_prediction_file=past_prediction_file,
+                  past_prediction_date=past_prediction_date,
+                  q=q
+                )
+                
+                #df_predictions = pd.concat([
+                #  df_predictions, df_agg_since_today_per_country,
+                #  df_agg_since_today_per_continent, df_agg_since_today_world
+                #  ],sort=False)
+                
+                df_predictions <- bind_rows(df_predictions, df_agg_since_today_per_country, df_agg_since_today_per_continent, df_agg_since_today_world)
+                
+                df_predictions <- df_predictions %>% arrange(Continent, Country, Province, Day)
+                
+                df_predictions_from_today <- df_predictions %>% filter(Day >= Sys.Date())
+                list(df_predictions_from_today, df_predictions)
+          
+            }
+         )
+)
 
-              residual_cases_lb <- rt_mn_sq_death_cases * qnorm(0.5 - q / 2)
-              residual_deaths_ub <- rt_mn_sq_death_cases * qnorm(0.5 + q / 2)
-              
-              # Generation of the dataframe from the day since 100th cas
-              
-              df_predictions_since_100_cont_country_prov <- data.frame(
-                "Total Detected LB"= data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
-                  mutate(max = max(as.integer(round(v + residual_cases_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max) 
-                ,
-                "Total Detected Deaths LB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
-                  mutate(max = c( total_detected_deaths_LB, 
-                                  max(as.integer(round(v + residual_deaths_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0))) 
-                ,
-                "Total Detected UB"= data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
-                  mutate(max = max(as.integer(round(v + residual_cases_ub * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max) 
-                ,
-                "Total Detected Deaths UB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
-                  mutate(max = c( total_detected_deaths_LB, 
-                                  max(as.integer(round(v + residual_deaths_ub * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0))) 
-              )
-              
-              df_agg_continent_temp <- bind_rows(df_agg_continent_temp, df_predictions_since_100_cont_country_prov)
-              
-              #df_agg_continent_temp = pd.concat([df_agg_continent_temp, df_predictions_since_100_cont_country_prov], axis = 1)
-        }
-        else 
-        {
-    
-          df_predictions_since_100_cont_country_prov <- data.frame(
-            "Total Detected LB" = rep(NaN, nrow(df_agg_continent_temp) ),  #: [np.nan for _ in range(len(df_agg_country_temp))],  
-            "Total Detected Deaths LB" = rep(NaN, nrow(df_agg_continent_temp) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
-            "Total Detected UB"  = rep(NaN, nrow(df_agg_continent_temp) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
-            "Total Detected Deaths UB"  = rep(NaN, nrow(df_agg_continent_temp) )   #:  [np.nan for _ in range(len(df_agg_country_temp))]
-          )
-          #df_agg_country_temp = pd.concat([df_agg_country_temp, df_predictions_since_100_cont_country_prov], axis = 1)
-          df_agg_continent_temp <- bind_rows(df_agg_continent_temp, df_predictions_since_100_cont_country_prov)
-        }  
-      
-        list_df_aggregated_continents.append(df_agg_continent_temp)
-      }
-      
-      df_agg_continent_final <- data.frame()
-      
-      for (i in list_df_aggregated_continents.append) {
-        df_agg_continent_final <- bind_rows(df_agg_continent_final, i)
-      }
-    
-      df_agg_continent_final 
-    }
-      
-  get_aggregation_world_with_cf <- function(
-        df_predictions ,
-        past_prediction_file  = "I://covid19orc//danger_map//predicted//Global_V2_20200720.csv",
-        past_prediction_date  = "2020-07-04",
-        q  = 0.5
-      ) 
-  {
-        #Creates aggregations at the world level as well as associated confidence intervals
-        #:param df_predictions: dataframe containing the raw predictions from the DELPHI model
-        #:param past_prediction_file: past prediction file's path for CI generation
-        #:param past_prediction_date: past prediction's date for CI generation
-        #:param q: quantile used for the CIs
-        #:return: dataframe with continent world aggregated predictions & associated confidence intervals
-      
-      #columns_without_bounds = [x for x in df_predictions.columns if ("LB" not in x) and ("UB" not in x)]
-      
-      columns_without_bounds <- c()
-      for ( x in names(df_predictions)) {
-        if (str_count(x, pattern = "LB|LB") == 0 )
-          columns_without_bounds <- c(columns_without_bounds, x)
-      }
-      
-      #df_agg_world = df_predictions[columns_without_bounds].groupby(["Day"]).sum(min_count = 1).reset_index()
-      
-      df_agg_world <- df_predictions[columns_without_bounds] %>% group_by(Day) %>% summarise(sum = sum())
-      
-      
-      df_agg_world["Continent"] <- "None"
-      df_agg_world["Country"] <- "None"
-      df_agg_world["Province"] <- "None"
-      df_agg_world <- df_agg_world[columns_without_bounds]
-      
-      past_predictions <- read_csv(past_prediction_file)
-      
-      #past_predictions_temp = (past_predictions[(past_predictions['Day'] > past_prediction_date) &  (past_predictions['Continent'] == "None") & (past_predictions['Country'] == "None")   & (past_predictions['Province'] == "None")]).sort_values("Day")
-      
-      past_predictions_temp <- past_predictions %>% filter(Day > past_prediction_date & Continent == "None" & Country == "None" & Province == "None") %>%
-          arrange(Day)
-      
-      total_detected <- df_agg_world['Total Detected'] 
-      total_detected_deaths <- df_agg_world['Total Detected Deaths'] 
-    
-      cases_fit_data <- df_agg_world['Total Detected True'] 
-      deaths_fit_data <- df_agg_world['Total Detected Deaths True'] 
-      since_100_dates <- df_agg_world['Day']   
-      
-      #n_days_btw_today_since_100 = (datetime.now() - pd.to_datetime(min(since_100_dates))).days
-      
-      n_days_btw_today_since_100 <- as.numeric(difftime(Sys.Date()  , n_days_btw_today_since_100, units = "days"))
-      
-      
-      if (nrow(past_predictions_temp) > 0) 
-      {
-          cases_fit_data_past <- as.data.frame(x = since_100_dates, y = cases_fit_data) %>% 
-                filter(x > past_prediction_date & !is.nan(y)) %>% select(y)
-          deaths_fit_data_past <- as.data.frame(x = since_100_dates, y = deaths_fit_data) %>% 
-            filter(x > past_prediction_date & !is.nan(y)) %>% select(y)
-          total_detected_past <- past_predictions_temp["Total Detected"][1:length(cases_fit_data_past)]
-          total_detected_deaths_past <- past_predictions_temp["Total Detected Deaths"][1:length(deaths_fit_data_past)]
-          
-          #residual_cases_lb = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(cases_fit_data_past,total_detected_past)])) * scipy.stats.norm.ppf(0.5 - q /2)
-          #residual_cases_ub = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(cases_fit_data_past,total_detected_past)])) * scipy.stats.norm.ppf(0.5 + q /2)
-          #residual_deaths_lb = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(deaths_fit_data_past,total_detected_deaths_past)])) * scipy.stats.norm.ppf(0.5 - q /2)
-          #residual_deaths_ub = np.sqrt(np.mean([(x- y) ** 2 for x,y in zip(deaths_fit_data_past,total_detected_deaths_past)])) *  scipy.stats.norm.ppf(0.5 + q /2)
-      
-          
-          rt_mn_sq_residual_cases <- data.frame(x=cases_fit_data_past, y=total_detected_past) %>% 
-            summarise(s = sqrt(mean( (x-y)^2) )) %>% as.numeric()
-          
-          residual_cases_lb <- rt_mn_sq_residual_cases * qnorm(0.5 - q / 2)
-          residual_deaths_ub <- rt_mn_sq_residual_cases * qnorm(0.5 + q / 2)
-          
-          rt_mn_sq_death_cases <- data.frame(x=deaths_fit_data_past, y=total_detected_deaths_past) %>% 
-            summarise(s = sqrt(mean( (x-y)^2) )) %>% as.numeric()
-          
-          residual_cases_lb <- rt_mn_sq_death_cases * qnorm(0.5 - q / 2)
-          residual_deaths_ub <- rt_mn_sq_death_cases * qnorm(0.5 + q / 2)
-          
-          
-          
-          # Generation of the dataframe from the day since 100th case
-          df_predictions_since_100_cont_country_prov < data.frame(
-            "Total Detected LB" = data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
-              mutate(max = max(as.integer(round(v + residual_cases_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max), 
-            "Total Detected Deaths LB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
-              mutate(max = c( total_detected_deaths_LB, 
-                              max(as.integer(round(v + residual_deaths_lb * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0))) ,
-            "Total Detected UB"= data.frame(c = c(1:length(total_detected), v = total_detected)) %>%   rowwise() %>%
-              mutate(max = max(as.integer(round(v + residual_cases_ub * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0)) %>% arrange(max) ,
-            "Total Detected Deaths UB"= data.frame(c = c(1:length(total_detected_deaths), v = total_detected_deaths)) %>%   rowwise() %>%
-              mutate(max = c( total_detected_deaths_LB, 
-                              max(as.integer(round(v + residual_deaths_ub * sqrt(max(c - n_days_btw_today_since_100, 0)),0)),0))) 
-          )
-          
-          #df_agg_world_final = pd.concat([df_agg_world, df_predictions_since_100_cont_country_prov], axis = 1)
-          #df_agg_world_final <- bind_rows(df_agg_world, df_predictions_since_100_cont_country_prov)
-      }
-      else
-      {
-        
-        df_predictions_since_100_cont_country_prov <- data.frame(
-          "Total Detected LB" = rep(NaN, nrow(df_agg_world) ),  #: [np.nan for _ in range(len(df_agg_country_temp))],  
-          "Total Detected Deaths LB" = rep(NaN, nrow(df_agg_world) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
-          "Total Detected UB"  = rep(NaN, nrow(df_agg_world) ),  #:  [np.nan for _ in range(len(df_agg_country_temp))],
-          "Total Detected Deaths UB"  = rep(NaN, nrow(df_agg_world) )   #:  [np.nan for _ in range(len(df_agg_country_temp))]
-        )
-      }
-      df_agg_world_final <- bind_rows(df_agg_world, df_predictions_since_100_cont_country_prov)
-      
-      df_agg_world_final     
-  }
-  
-  append_all_aggregations_cf <- function(
-    df_predictions, past_prediction_file = "I://covid19orc//danger_map//predicted//Global_V2_20200720.csv",
-    past_prediction_date = "2020-07-04",
-    q = 0.5   ) 
-    {
-     #Creates and appends all the predictions' aggregations & Confidnece Intervals at the country, continent and  world levels
-      #        :param df_predictions: dataframe with the raw predictions from DELPHI
-      #        :param past_prediction_file: past prediction file's path for CI generation
-      #        :param past_prediction_date: past prediction's date for CI generation
-      #        :param q: quantile used for the CIs
-      #        :return: dataframe with predictions raw from DELPHI and aggregated ones, as well as associated confidence
-      #        intervals at the country, continent & world levels
-       
-        df_agg_since_today_per_country <- DELPHIAggregations.get_aggregation_per_country_with_cf(
-          df_predictions=df_predictions,
-          past_prediction_file=past_prediction_file,
-          past_prediction_date=past_prediction_date,
-          q=q
-        )
-        df_agg_since_today_per_continent = DELPHIAggregations.get_aggregation_per_continent_with_cf(
-          df_predictions=df_predictions,
-          past_prediction_file=past_prediction_file,
-          past_prediction_date=past_prediction_date,
-          q=q
-        )
-        df_agg_since_today_world = DELPHIAggregations.get_aggregation_world_with_cf(
-          df_predictions=df_predictions,
-          past_prediction_file=past_prediction_file,
-          past_prediction_date=past_prediction_date,
-          q=q
-        )
-        
-        #df_predictions = pd.concat([
-        #  df_predictions, df_agg_since_today_per_country,
-        #  df_agg_since_today_per_continent, df_agg_since_today_world
-        #  ],sort=False)
-        
-        df_predictions <- bind_rows(df_predictions, df_agg_since_today_per_country, df_agg_since_today_per_continent, df_agg_since_today_world)
-        
-        df_predictions <- df_predictions %>% arrange(Continent, Country, Province, Day)
-        
-        df_predictions_from_today <- df_predictions %>% filter(Day >= Sys.Date())
-        list(df_predictions_from_today, df_predictions)
-  }
-  
-get_aggregation_per_country <- function(df_policy_predictions)
-{
-  #Aggregates policy predictions at the country level from the predictions dataframe
-  #param df_policy_predictions: DELPHI policy predictions dataframe
-  #return: DELPHI policy predictions dataframe aggregated at the country level
-   
-  #df_policy_predictions = df_policy_predictions[df_policy_predictions["Province"] != "None"]
-  
-    df_policy_predictions <- df_policy_predictions %>% filter(Province != "None")
-    
-    df_agg_country <- df_policy_predictions %>%  group_by(Policy, Time, Continent, Country, Day) %>% summarize(sum)
-  
-    df_agg_country["Province"] <- "None"
-    df_agg_country <- df_agg_country %>% select("Policy", "Time", "Continent", "Country", "Province", 
-        "Day", "Total.Detected", "Active", "Active.Hospitalized", "Cumulative.Hospitalized", 
-        "Total.Detected.Deaths", "Active.Ventilated")
-    
-    return(df_agg_country)
-}
 
-get_aggregation_per_continent <- function(df_policy_predictions)
-{
-        # Aggregates policy predictions at the continent level from the predictions dataframe
-        #:param df_policy_predictions: DELPHI policy predictions dataframe
-        #:return: DELPHI policy predictions dataframe aggregated at the continent level
-        
-    df_agg_continent <- df_policy_predictions %>% group_by(Policy, Time, Continent, Day) %>% aggregate(sum())
-    
-    df_agg_continent["Country"] <- "None"
-    df_agg_continent["Province"] <- "None"
-    df_agg_continent <- df_agg_continent %>% select ("Policy", "Time", "Continent", "Country", "Province", "Day", "Total.Detected", "Active",
-        "Active.Hospitalized", "Cumulative.Hospitalized", "Total.Detected Deaths", "Active.Ventilated")
-    return (df_agg_continent)
-}
+DELPHIAggregationsPolicies <- setRefClass("DELPHIAggregationsPolicies",
+          methods = list(
+            get_aggregation_per_country = function(df_policy_predictions)
+            {
+              #Aggregates policy predictions at the country level from the predictions dataframe
+              #param df_policy_predictions: DELPHI policy predictions dataframe
+              #return: DELPHI policy predictions dataframe aggregated at the country level
+               
+              #df_policy_predictions = df_policy_predictions[df_policy_predictions["Province"] != "None"]
+              
+                df_policy_predictions <- df_policy_predictions %>% filter(Province != "None")
+                
+                df_agg_country <- df_policy_predictions %>%  group_by(Policy, Time, Continent, Country, Day) %>% summarize(sum)
+              
+                df_agg_country["Province"] <- "None"
+                df_agg_country <- df_agg_country %>% select("Policy", "Time", "Continent", "Country", "Province", 
+                    "Day", "Total.Detected", "Active", "Active.Hospitalized", "Cumulative.Hospitalized", 
+                    "Total.Detected.Deaths", "Active.Ventilated")
+                
+                return(df_agg_country)
+            },
+            get_aggregation_per_continent = function(df_policy_predictions)
+            {
+            # Aggregates policy predictions at the continent level from the predictions dataframe
+            #:param df_policy_predictions: DELPHI policy predictions dataframe
+            #:return: DELPHI policy predictions dataframe aggregated at the continent level
+              df_agg_continent <- df_policy_predictions %>% group_by(Policy, Time, Continent, Day) %>% aggregate(sum())
+              
+              df_agg_continent["Country"] <- "None"
+              df_agg_continent["Province"] <- "None"
+              df_agg_continent <- df_agg_continent %>% select ("Policy", "Time", "Continent", "Country", "Province", "Day", "Total.Detected", "Active",
+                  "Active.Hospitalized", "Cumulative.Hospitalized", "Total.Detected Deaths", "Active.Ventilated")
+              return (df_agg_continent)
+            },
+            get_aggregation_world = function(df_policy_predictions)
+            {
+              
+             #Aggregates policy predictions at the world level from the predictions dataframe
+             #:param df_policy_predictions: DELPHI policy predictions dataframe
+            #return: DELPHI policy predictions dataframe aggregated at the world level
+             
+                df_agg_world <- df_policy_predictions %>% group_by(Policy, Time, Day) %>% aggregate(sum())
+                df_agg_world["Continent"] <- "None"
+                df_agg_world["Country"] <- "None"
+                df_agg_world["Province"] <- "None"
+                df_agg_world <- df_agg_world %>% select( "Policy", "Time", "Continent", "Country", "Province", "Day", "Total.Detected", 
+                                                         "Active", "Active.Hospitalized", "Cumulative.Hospitalized", "Total.Detected.Deaths", 
+                                                         "Active.Ventilated")
+                return(df_agg_world)
 
-get_aggregation_world <- function(df_policy_predictions)
-{
- #Aggregates policy predictions at the world level from the predictions dataframe
- #:param df_policy_predictions: DELPHI policy predictions dataframe
-#return: DELPHI policy predictions dataframe aggregated at the world level
- 
-    df_agg_world <- df_policy_predictions %>% group_by(Policy, Time, Day) %>% aggregate(sum())
-    df_agg_world["Continent"] <- "None"
-    df_agg_world["Country"] <- "None"
-    df_agg_world["Province"] <- "None"
-    df_agg_world <- df_agg_world %>% select( "Policy", "Time", "Continent", "Country", "Province", "Day", "Total.Detected", 
-                                             "Active", "Active.Hospitalized", "Cumulative.Hospitalized", "Total.Detected.Deaths", 
-                                             "Active.Ventilated")
-    return(df_agg_world)
-}
+            },
+            append_all_aggregations = function(df_policy_predictions)
+            {
+                #Creates and appends all the policy predictions' aggregations at the country, continent and world levels
+                #:param df_predictions: dataframe with the raw policy predictions from DELPHI
+                #:return: dataframe with raw policy predictions from DELPHI and aggregated ones at the country,
+                #continent & world levels
+                df_agg_since_today_per_country <- get_aggregation_per_country(df_policy_predictions)
+                df_agg_since_today_per_continent <- get_aggregation_per_continent(df_policy_predictions)
+                df_agg_since_today_world <- get_aggregation_world(df_policy_predictions)
+                df_policy_predictions <- bind_rows(
+                    df_policy_predictions,
+                    df_agg_since_today_per_country,
+                    df_agg_since_today_per_continent,
+                    df_agg_since_today_world
+                )
+                df_policy_predictions <- df_policy_predictions %>% arrange( Policy, Time, Continent, Country, Province, Day)
+                return(df_policy_predictions)
+            }
+          ))
 
-append_all_aggregations <- function(df_policy_predictions)
-{
-        #Creates and appends all the policy predictions' aggregations at the country, continent and world levels
-        #:param df_predictions: dataframe with the raw policy predictions from DELPHI
-        #:return: dataframe with raw policy predictions from DELPHI and aggregated ones at the country,
-        #continent & world levels
-        
-  df_agg_since_today_per_country <- get_aggregation_per_country(df_policy_predictions)
-  df_agg_since_today_per_continent <- get_aggregation_per_continent(df_policy_predictions)
-  df_agg_since_today_world <- get_aggregation_world(df_policy_predictions)
-  df_policy_predictions <- bind_rows(
-      df_policy_predictions,
-      df_agg_since_today_per_country,
-      df_agg_since_today_per_continent,
-      df_agg_since_today_world
-  )
-  df_policy_predictions <- df_policy_predictions %>% arrange( Policy, Time, Continent, Country, Province, Day)
-  return(df_policy_predictions)
-}
+
+
 
 DELPHIBacktest <- setClass( 
   #setting the class name
@@ -1722,7 +1723,7 @@ get_initial_conditions <- function(params_fitted, global_params_fixed)
 {
       #Generates the initial conditions for the DELPHI model based on global fixed parameters (mostly populations and some
       #constant rates) and fitted parameters (the internal parameters k1 and k2)
-      #:param params_fitted: tuple of parameters being fitted, mostly interested in k1 and k2 here (parameters 7 and 8)
+      #:param params_fitted: vector of parameters being fitted, mostly interested in k1 and k2 here (parameters 7 and 8)
       #:param global_params_fixed: tuple of fixed and constant parameters for the model defined a while ago
       #:return: a list of initial conditions for all 16 states of the DELPHI model
     
@@ -1758,7 +1759,7 @@ get_initial_conditions <- function(params_fitted, global_params_fixed)
   DD_0 <- PopulationD
   DT_0 <- PopulationI
   x_0_cases <- list( S_0, E_0, I_0, UR_0, DHR_0, DQR_0, UD_0, DHD_0, DQD_0, R_0,    D_0, TH_0, DVR_0, DVD_0, DD_0, DT_0)
-  x_0_cases
+  return(x_0_cases)
 }
 
 get_initial_conditions_with_testing <- function(params_fitted, global_params_fixed)
@@ -1809,7 +1810,7 @@ get_initial_conditions_with_testing <- function(params_fitted, global_params_fix
     x_0_cases = list (      S_0, E_0, I_0, UR_0, DHR_0, DQR_0, UD_0, DHD_0,
       DQD_0, R_0, D_0, TH_0, DVR_0, DVD_0, DD_0, DT_0)
     
-    x_0_cases
+    return(x_0_cases)
 }
 
 create_fitting_data_from_validcases <- function(validcases) #: pd.DataFrame) -> (float, list, list):
@@ -1844,27 +1845,33 @@ get_residuals_value <- function (
     
     if (optimizer %in% c("tnc", "trust-constr")) {
       residuals_value = sum(
-        np.multiply((x_sol[15, ] - cases_data_fit) ** 2, weights)
+        #np.multiply((x_sol[15, ] - cases_data_fit) ** 2, weights)
+        ((x_sol[15, ] - cases_data_fit) ** 2) * weights
         + balance
         * balance
-        * np.multiply((x_sol[14, ] - deaths_data_fit) ** 2, weights)
+        * #np.multiply((x_sol[14, ] - deaths_data_fit) ** 2, weights)
+          ((x_sol[14, ] - deaths_data_fit) ** 2) * weights
       )
     } 
     else if (optimizer == "annealing") 
     {
         residuals_value = sum(
-          np.multiply((x_sol[15, ] - cases_data_fit) ** 2, weights)
+          #np.multiply((x_sol[15, ] - cases_data_fit) ** 2, weights)
+          (((x_sol[15, ] - cases_data_fit) ** 2) * weights)
           + balance
           * balance
-          * np.multiply((x_sol[14, ] - deaths_data_fit) ** 2, weights)
+          * (((x_sol[14, ] - deaths_data_fit) ** 2) * weights)
+            #np.multiply((x_sol[14, ] - deaths_data_fit) ** 2, weights)
         ) + sum(
-          np.multiply(
-            (x_sol[15, 7:length(x_sol[15])] - x_sol[15, 1:-7] - cases_data_fit[7:length(cases_data_fit)] + cases_data_fit[1:-7]) ** 2,
-            weights[7:length(weights)],
+          #np.multiply
+          (
+            ((x_sol[15, 7:length(x_sol[15])] - x_sol[15, 1:-7] - cases_data_fit[7:length(cases_data_fit)] + cases_data_fit[1:-7]) ** 2) *
+            weights[7:length(weights)]
           )
-          + balance * balance * np.multiply(
-            (x_sol[14, 7:length(x_sol[14])] - x_sol[14, 1:-7] - deaths_data_fit[7:length(deaths_data_fit)] + deaths_data_fit[1:-7]) ** 2,
-            weights[7:length(weights)],
+          + balance * balance * #np.multiply
+          (
+            ((x_sol[14, 7:length(x_sol[14])] - x_sol[14, 1:-7] - deaths_data_fit[7:length(deaths_data_fit)] + deaths_data_fit[1:-7]) ** 2) *
+            weights[7:length(weights)]
           )
       )
     }
@@ -1908,7 +1915,7 @@ get_mape_data_fitting <- function(cases_data_fit, deaths_data_fit, x_sol_final) 
           + compute_mape(deaths_data_fit, x_sol_final[15, 1: length(deaths_data_fit)])
         ) / 2
     }
-    mape_data
+    return(mape_data)
 }
 
 compute_sign_mape <- function(y_true, y_pred)
@@ -1986,8 +1993,8 @@ compute_mae_and_mape <- function(y_true, y_pred)
     #y_true, y_pred = np.array(y_true), np.array(y_pred)
     y_true <- unlist(y_true)
     y_pred <- unlist(y_pred)
-    mae <- mean(np.abs((y_true - y_pred)))
-    mape <- mean(np.abs((y_true - y_pred)[y_true > 0] / y_true[y_true > 0])) * 100
+    mae <- mean(abs((y_true - y_pred)))
+    mape <- mean(abs((y_true - y_pred)[y_true > 0] / y_true[y_true > 0])) * 100
     list(mae, mape)
 }
 
@@ -2004,7 +2011,7 @@ compute_mape <- function(y_true, y_pred) # -> float:
   y_true <- unlist(y_true)
   y_pred <- unlist(y_pred)
   
-  mape <- mean(np.abs((y_true - y_pred)[y_true > 0] / y_true[y_true > 0])) * 100
+  mape <- mean(abs((y_true - y_pred)[y_true > 0] / y_true[y_true > 0])) * 100
   mape
 }
   
