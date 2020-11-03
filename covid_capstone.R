@@ -58,42 +58,7 @@ source("params.r")
 source("capstone_utils.R")
 source("covid_classes.R")
 
-cfg <- read_yaml("config.yml")
-CONFIG_FILEPATHS = unlist(cfg$filepaths)
 
-time_beginning <- Sys.time()
-yesterday <- format(Sys.Date() - 1, "%Y%m%d")
-
-yesterday_logs_filename <- paste(
-  yesterday , "_", format(Sys.time(), "%H%M")
-)
-
-parser <- arg_parser("Delphi")
-
-parser <- add_argument(parser, "--optimizer", type="character", help= paste(
-  "Which optimizer among 'tnc', 'trust-constr' or 'annealing' would you like to use ? " ,
-    "Note that 'tnc' and 'trust-constr' lead to local optima, while 'annealing' is a " ,
-    "method for global optimization: ")
-                    , default="tnc", short='-o')
-
-parser <- add_argument(parser, "--confidence_intervals", type="numeric", 
-                       help= "Generate Confidence Intervals? Reply 0 or 1 for False or True.", 
-                       default=1, short='-ci')
-
-parser <- add_argument(parser, "--since100case", type="numeric", 
-                       help= "Save all history (since 100 cases)? Reply 0 or 1 for False or True.", 
-                       default=1, short='-s100')
-
-arguments <- parse_args(parser)
-
-
-OPTIMZER <- arguments$optimizer
-GET_CONFIDENCE_INTERVALS <- as.logical (arguments$confidence_intervals)
-SAVE_SINCE100_CASES <- as.logical(arguments$since100case)
-PATH_TO_FOLDER_DANGER_MAP = CONFIG_FILEPATHS["danger_map"]
-
-#past_prediction_date <- format(Sys.Date() - 14, "%Y%m%d")
-past_prediction_date - Sys.Date() - 14 # last prediction date of 14 days ago
 
 solve_and_predict_area <- function(
   tuple_area_,  yesterday_, past_parameters_, popcountries )
@@ -114,12 +79,12 @@ solve_and_predict_area <- function(
     province <- tuple_area_[[3]]
     country_sub <- str_replace_all( country, " ", "_")
     province_sub <- str_replace_all( provinc, " ", "_") #province.replace(" ", "_")
-    if (dir.exists(paste(PATH_TO_FOLDER_DANGER_MAP , "processed/Global/Cases_" , country_sub, "_", province_sub, ".csv")))
+    if (dir.exists(paste(PATH_TO_FOLDER_DANGER_MAP , "processed/Global/Cases_" , country_sub, "_", province_sub, ".csv", sep = "")))
     {
-      totalcases <- read_csv( paste(PATH_TO_FOLDER_DANGER_MAP , "processed/Global/Cases_", country_sub, "_", province_sub, ".csv"))
+      totalcases <- read_csv( paste(PATH_TO_FOLDER_DANGER_MAP , "processed/Global/Cases_", country_sub, "_", province_sub, ".csv", sep = ""))
       
       if  ( max(totalcases$day_since100) < 0 ) {
-          flog.warn(paste("Not enough cases (less than 100) for Continent=", continent, " Country=", country, " and Province= ", province))
+          flog.warn(paste("Not enough cases (less than 100) for Continent=", continent, " Country=", country, " and Province= ", province, sep = ""))
           return (NULL)
       }
     
@@ -208,7 +173,7 @@ solve_and_predict_area <- function(
       # Now we start the modeling part:
       if (length(validcases) <= validcases_threshold) {
             flog.warn(  paste("Not enough historical data (less than a week)",
-               "for Continent=", continent," Country=", country, " and Province=", province  ))
+               "for Continent=", continent," Country=", country, " and Province=", province, sep = ""  ))
         return (NULL)
       }
       else
@@ -228,8 +193,8 @@ solve_and_predict_area <- function(
         PopulationCI = PopulationI - PopulationD - PopulationR
         if (PopulationCI <= 0 )
         {
-            flog.error(paste("PopulationCI value is negative (",  PopulationCI, "), need to check why"))
-            stop(paste("PopulationCI value is negative (", PopulationCI, "), need to check why"))
+            flog.error(paste("PopulationCI value is negative (",  PopulationCI, "), need to check why", sep = ""))
+            stop(paste("PopulationCI value is negative (", PopulationCI, "), need to check why", sep = ""))
         }
                   #  Fixed Parameters based on meta-analysis:
                   #  p_h: Hospitalization Percentage
@@ -290,7 +255,7 @@ solve_and_predict_area <- function(
                 p_dth_mod <- (2 / pi) * (p_dth - 0.01) * (arctan(-t / 20 * r_dthdecay) + pi / 2) + 0.01
                 
                 if (length(y) == 16) {
-                  stop(paste("Too many input variables, got ", length(y), ", expected 16"))
+                  stop(paste("Too many input variables, got ", length(y), ", expected 16", sep = ""))
                 }
                 
                 #S, E, I, AR, DHR, DQR, AD, DHD, DQD, R, D, TH, DVR, DVD, DD, DT = y
@@ -433,7 +398,7 @@ solve_and_predict_area <- function(
           output = dual_annealing( residuals_totalcases, x0=parameter_list, bounds=bounds_params )
         }
         else {
-          stop(paste("Optimizer not in 'tnc', 'trust-constr' or 'annealing' so not supported"))
+          stop("Optimizer not in 'tnc', 'trust-constr' or 'annealing' so not supported")
         }
     
         best_params <- output$x
@@ -515,7 +480,7 @@ solve_and_predict_area <- function(
         if (GET_CONFIDENCE_INTERVALS) {
           output <-   data_creator@create_datasets_with_confidence_intervals(
               cases_data_fit, deaths_data_fit,
-              past_prediction_file=PATH_TO_FOLDER_DANGER_MAP + paste("predicted/Global_V2_", format( as.Date(past_prediction_date), "%Y%m%d"), ".csv"),
+              past_prediction_file=PATH_TO_FOLDER_DANGER_MAP + paste("predicted/Global_V2_", format( as.Date(past_prediction_date), "%Y%m%d"), ".csv", sep = ""),
               past_prediction_date= past_prediction_date)
         }
         else {
@@ -544,101 +509,145 @@ solve_and_predict_area <- function(
       return (NULL)   
     }
 }
-
-#main code to be executed
-
-if (! dir.exists(paste( CONFIG_FILEPATHS["logs"] + "model_fitting/" )))
-  dir.create(paste( CONFIG_FILEPATHS["logs"] + "model_fitting/" ))
-
-logger_filename <- paste(CONFIG_FILEPATHS["logs"], "model_fitting/delphi_model_V3_", yesterday_logs_filename, "_" , OPTIMIZER, ".log")
-logger_name <- "covid_capstone"
-
-flog.logger(logger_name, threshold=DEBUG, appender=appender.file(logger_filename))
-
-flog.info("The chosen optimizer for this run was %s and 'generation of Confidence Intervals' flag is %s", 
-          OPTIMIZER, GET_CONFIDENCE_INTERVALS)
-
-popcountries <- read.csv(paste(PATH_TO_FOLDER_DANGER_MAP , "processed/Global/Population_Global.csv"))
-
-popcountries["tuple_area"] <- #itertools::izip(Continent = popcountries.Continent, Country = popcountries.Country, Province = popcountries.Province)
-    data.frame(Continent = popcountries.Continent, Country = popcountries.Country, Province = popcountries.Province)
-
-try {
-  past_parameters = read.csv(paste(   PATH_TO_FOLDER_DANGER_MAP, "predicted/Parameters_Global_V2_", yesterday, ".csv"))
-} catch() {
-  past_parameters <- NULL          
-}
-        
-list_df_global_predictions_since_today <- list()
-list_df_global_predictions_since_100_cases <- list()
-list_df_global_parameters <- list()
-obj_value = 0
-
-list_tuples <- as.list(popcountries$tuple_area)
-
-flog.info("Number of areas to be fitted in this run: %d", length(list_tuples))
-      
-
-for(tuple in list_tuples) {
-  result_area <- solve_and_predict_area( tuple,  yesterday, past_parameters, popcountries = popcountries)
-  if ( is.null(  result_area ))
-  {
-    
-    df_parameters_area <- result_area[[1]]
-    df_predictions_since_today_area <- result_area[[2]]
-    df_predictions_since_100_area <- result_area[[3]]
-    output <- result_area[[4]]
-    
-    obj_value <- obj_value + output$fun
-    # Then we add it to the list of df to be concatenated to update the tracking df
-    list_df_global_parameters.append(df_parameters_area)
-    list_df_global_predictions_since_today.append(df_predictions_since_today_area)
-    list_df_global_predictions_since_100_cases.append(df_predictions_since_100_area)
-  }
-}
-flogging.info("Finished the processing for all areas")   
-      
-today_date_str <-  format(Sys.Date(), "%Y%m%d")
-df_global_parameters = data.frame()
-for (item in list_df_global_parameters) 
-  df_global_parameters <- bind_rows( df_global_parameters, item) 
-df_global_parameters <- df_global_parameters %>% arrange("Country", "Province")
-
-df_global_predictions_since_today = data.frame()
-for (item in list_df_global_predictions_since_today) 
-  df_global_predictions_since_today <- bind_rows( df_global_predictions_since_today, item) 
-
-df_global_predictions_since_today <- DELPHIAggregations$append_all_aggregations(
-  df_global_predictions_since_today
-)
-
-df_global_predictions_since_100_cases = data.frame()
-for (item in list_df_global_predictions_since_100_cases) 
-  df_global_predictions_since_100_cases <- bind_rows( df_global_predictions_since_100_cases, item) 
-
-if (GET_CONFIDENCE_INTERVALS) 
-{
-  output <- DELPHIAggregations.append_all_aggregations_cf(
-    df_global_predictions_since_100_cases,
-    past_prediction_file= paste(PATH_TO_FOLDER_DANGER_MAP , "predicted/Global_V2_", format(past_prediction_date, "%Y%m%d") , ".csv"),
-    past_prediction_date=past_prediction_date
+  
+  #main code to be executed
+  
+main <- function() {
+  
+  cfg <- read_yaml("config.yml")
+  CONFIG_FILEPATHS = unlist(cfg$filepaths)
+  
+  time_beginning <- Sys.time()
+  yesterday <- format(Sys.Date() - 1, "%Y%m%d")
+  
+  yesterday_logs_filename <- paste(
+    yesterday , "_", format(Sys.time(), "%H%M", sep = "")
   )
   
-  df_global_predictions_since_today <- output[[1]]
-  df_global_predictions_since_100_cases <- output[[2]]
+  parser <- arg_parser("Delphi")
   
-} else { 
-  df_global_predictions_since_100_cases = DELPHIAggregations$append_all_aggregations( df_global_predictions_since_100_cases )
+  parser <- add_argument(parser, "--optimizer", type="character", help= paste(
+    "Which optimizer among 'tnc', 'trust-constr' or 'annealing' would you like to use ? " ,
+    "Note that 'tnc' and 'trust-constr' lead to local optima, while 'annealing' is a " ,
+    "method for global optimization: ",  sep = "")
+    , default="tnc", short='-o')
+  
+  parser <- add_argument(parser, "--confidence_intervals", type="numeric", 
+                         help= "Generate Confidence Intervals? Reply 0 or 1 for False or True.", 
+                         default=1, short='-ci')
+  
+  parser <- add_argument(parser, "--since100case", type="numeric", 
+                         help= "Save all history (since 100 cases)? Reply 0 or 1 for False or True.", 
+                         default=1, short='-s100')
+  
+  arguments <- parse_args(parser)
+  
+  
+  OPTIMZER <- arguments$optimizer
+  GET_CONFIDENCE_INTERVALS <- as.logical (arguments$confidence_intervals)
+  SAVE_SINCE100_CASES <- as.logical(arguments$since100case)
+  PATH_TO_FOLDER_DANGER_MAP = CONFIG_FILEPATHS["danger_map"]
+  
+  #past_prediction_date <- format(Sys.Date() - 14, "%Y%m%d")
+  past_prediction_date - Sys.Date() - 14 # last prediction date of 14 days ago
+
+
+  if (! dir.exists(paste( CONFIG_FILEPATHS["logs"] + "model_fitting/", sep = "" )))
+    dir.create(paste( CONFIG_FILEPATHS["logs"] + "model_fitting/", sep = "" ))
+  
+  logger_filename <- paste(CONFIG_FILEPATHS["logs"], "model_fitting/delphi_model_V3_", yesterday_logs_filename, "_" , OPTIMIZER, ".log", sep = "")
+  logger_name <- "covid_capstone"
+  
+  flog.logger(logger_name, threshold=DEBUG, appender=appender.file(logger_filename))
+  
+  flog.info("The chosen optimizer for this run was %s and 'generation of Confidence Intervals' flag is %s", 
+            OPTIMIZER, GET_CONFIDENCE_INTERVALS)
+  
+  popcountries <- read.csv(paste(PATH_TO_FOLDER_DANGER_MAP , "processed/Global/Population_Global.csv", sep = ""))
+  
+  popcountries["tuple_area"] <- #itertools::izip(Continent = popcountries.Continent, Country = popcountries.Country, Province = popcountries.Province)
+      data.frame(Continent = popcountries.Continent, Country = popcountries.Country, Province = popcountries.Province)
+  
+  tryCatch ({
+    past_parameters <- read.csv(paste(   PATH_TO_FOLDER_DANGER_MAP, "predicted/Parameters_Global_V2_", yesterday, ".csv", sep = ""))
+  }, finally = {
+    past_parameters <- NULL          
+  })
+          
+  list_df_global_predictions_since_today <- list()
+  list_df_global_predictions_since_100_cases <- list()
+  list_df_global_parameters <- list()
+  obj_value = 0
+  
+  list_tuples <- as.list(popcountries$tuple_area)
+  
+  flog.info("Number of areas to be fitted in this run: %d", length(list_tuples))
+        
+  
+  for(tuple in list_tuples) {
+    result_area <- solve_and_predict_area( tuple,  yesterday, past_parameters, popcountries = popcountries)
+    if ( is.null(  result_area ))
+    {
+      
+      df_parameters_area <- result_area[[1]]
+      df_predictions_since_today_area <- result_area[[2]]
+      df_predictions_since_100_area <- result_area[[3]]
+      output <- result_area[[4]]
+      
+      obj_value <- obj_value + output$fun
+      # Then we add it to the list of df to be concatenated to update the tracking df
+      list_df_global_parameters.append(df_parameters_area)
+      list_df_global_predictions_since_today.append(df_predictions_since_today_area)
+      list_df_global_predictions_since_100_cases.append(df_predictions_since_100_area)
+    }
+  }
+  flogging.info("Finished the processing for all areas")   
+        
+  today_date_str <-  format(Sys.Date(), "%Y%m%d")
+  df_global_parameters = data.frame()
+  for (item in list_df_global_parameters) 
+    df_global_parameters <- bind_rows( df_global_parameters, item) 
+  df_global_parameters <- df_global_parameters %>% arrange("Country", "Province")
+  
+  df_global_predictions_since_today = data.frame()
+  for (item in list_df_global_predictions_since_today) 
+    df_global_predictions_since_today <- bind_rows( df_global_predictions_since_today, item) 
+  
+  df_global_predictions_since_today <- DELPHIAggregations$append_all_aggregations(
+    df_global_predictions_since_today
+  )
+  
+  df_global_predictions_since_100_cases = data.frame()
+  for (item in list_df_global_predictions_since_100_cases) 
+    df_global_predictions_since_100_cases <- bind_rows( df_global_predictions_since_100_cases, item) 
+  
+  if (GET_CONFIDENCE_INTERVALS) 
+  {
+    output <- DELPHIAggregations.append_all_aggregations_cf(
+      df_global_predictions_since_100_cases,
+      past_prediction_file= paste(PATH_TO_FOLDER_DANGER_MAP , "predicted/Global_V2_", format(past_prediction_date, "%Y%m%d") , ".csv", sep = ""),
+      past_prediction_date=past_prediction_date
+    )
+    
+    df_global_predictions_since_today <- output[[1]]
+    df_global_predictions_since_100_cases <- output[[2]]
+    
+  } else { 
+    df_global_predictions_since_100_cases = DELPHIAggregations$append_all_aggregations( df_global_predictions_since_100_cases )
+  }
+  
+  delphi_data_saver <- new("DELPHIDataSaver",
+    path_to_folder_danger_map=PATH_TO_FOLDER_DANGER_MAP,
+    path_to_website_predicted=PATH_TO_WEBSITE_PREDICTED,
+    df_global_parameters=df_global_parameters,
+    df_global_predictions_since_today=df_global_predictions_since_today,
+    df_global_predictions_since_100_cases=df_global_predictions_since_100_cases,
+  )
+  delphi_data_saver@save_all_datasets(optimizer=OPTIMIZER, save_since_100_cases=SAVE_SINCE100_CASES, website=SAVE_TO_WEBSITE)
+  
+  flogger.info("Exported all 3 datasets to website & danger_map repositories, total runtime was %d minutes", 
+               round((time.time() - time_beginning)/60, 2))
+
 }
 
-delphi_data_saver <- new("DELPHIDataSaver",
-  path_to_folder_danger_map=PATH_TO_FOLDER_DANGER_MAP,
-  path_to_website_predicted=PATH_TO_WEBSITE_PREDICTED,
-  df_global_parameters=df_global_parameters,
-  df_global_predictions_since_today=df_global_predictions_since_today,
-  df_global_predictions_since_100_cases=df_global_predictions_since_100_cases,
-)
-delphi_data_saver@save_all_datasets(optimizer=OPTIMIZER, save_since_100_cases=SAVE_SINCE100_CASES, website=SAVE_TO_WEBSITE)
 
-flogger.info("Exported all 3 datasets to website & danger_map repositories, total runtime was %d minutes", 
-             round((time.time() - time_beginning)/60, 2))

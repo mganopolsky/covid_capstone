@@ -6,9 +6,9 @@ source("params.r")
 source("capstone_utils.R")
 
 
-DELPHIDataCreator <- setClass( 
+CapstoneDataCREATOR <- setClass( 
   #setting the class name
-  "DELPHIDataCreator", 
+  "CapstoneDataCREATOR", 
   
   
   #defining the slots
@@ -27,27 +27,27 @@ DELPHIDataCreator <- setClass(
   
 )
 
-validDELPHIDataCreatorObject <- function(.Object) {
+validCapstoneDataCREATORObject <- function(object) {
   
-  if ((.Object@testing_data_included & (length(.Object@best_params) == 14))  |
-      (!.Object@testing_data_included & (length(.Object@best_params) == 11)))
+  if ((object@testing_data_included & (length(object@best_params) == 14))  |
+      (!object@testing_data_included & (length(object@best_params) == 11)))
     TRUE
   
-  if (.Object@testing_data_included) {
-    if (length(.Object@best_params) != 14) {
-      paste("Expected 9 best parameters, got ", length(.Object@best_params))
+  if (object@testing_data_included) {
+    if (length(object@best_params) != 14) {
+      paste("Expected 9 best parameters, got ", length(object@best_params), sep = "")
     }
   } else {
-    if (length(.Object@best_params) != 11) {
-      paste("Expected 7 best parameters, got ", length(.Object@best_params))
+    if (length(object@best_params) != 11) {
+      paste("Expected 7 best parameters, got ", length(object@best_params), sep = "")
     }
   }
 }
 ## assign the function as the validity method for the class
-setValidity("DELPHIDataCreator", validDELPHIDataCreatorObject)
+setValidity("CapstoneDataCREATOR", validCapstoneDataCREATORObject)
 
 
-setMethod("initialize", "DELPHIDataCreator",
+setMethod("initialize", "CapstoneDataCREATOR",
           function(.Object,
                    x_sol_final, 
                    date_day_since100 ,
@@ -76,7 +76,7 @@ setGeneric(name="create_dataset_parameters",
            }
 )
 
-setMethod(f="create_dataset_parameters", signature="DELPHIDataCreator",
+setMethod(f="create_dataset_parameters", signature="CapstoneDataCREATOR",
           definition=function(.Object, mape, ...) 
   {
     #Creates the parameters dataset with the results from the optimization and the pre-computed MAPE
@@ -115,7 +115,7 @@ setGeneric(name="create_datasets_predictions",
            }
 )
 
-setMethod("create_datasets_predictions", "DELPHIDataCreator",function(.Object, ...)
+setMethod("create_datasets_predictions", "CapstoneDataCREATOR",function(.Object, ...)
     {
        #-> (pd.DataFrame, pd.DataFrame):
       #  Creates two dataframes with the predictions of the DELPHI model, the first one since the day of the prediction,
@@ -136,12 +136,7 @@ setMethod("create_datasets_predictions", "DELPHIDataCreator",function(.Object, .
         total_detected <- .Object@x_sol_final[[16]]  # DT
         #total_detected =   [int(round(x, 0)) for x in total_detected]
         total_detected <- as.integer(total_detected)
-        #active_cases = (
-        #  object@x_sol_final[5, :]
-        #  + object@x_sol_final[6, :]
-        #  + object@x_sol_final[8, :]
-        #  + object@x_sol_final[9, :]
-        #)  # DHR + DQR + DHD + DQD
+        
         
         # DHR + DQR + DHD + DQD
         active_cases <- .Object@x_sol_final[[5]] + .Object@x_sol_final[[6]]  + 
@@ -149,35 +144,16 @@ setMethod("create_datasets_predictions", "DELPHIDataCreator",function(.Object, .
         
         active_cases <- as.integer(active_cases)
         
-        #active_cases = [int(round(x, 0)) for x in active_cases]
-        #active_hospitalized = (
-        #  object@x_sol_final[5, :] + object@x_sol_final[8, :]
-        #)  # DHR + DHD
         
         active_hospitalized <- .Object@x_sol_final[[5]] + .Object@x_sol_final[[8]]  # DHR + DHD
         active_hospitalized <- as.integer(active_hospitalized)
-        
-        #active_hospitalized = [int(round(x, 0)) for x in active_hospitalized]
-        #cumulative_hospitalized = object@x_sol_final[12, :]  # TH
-        #cumulative_hospitalized = [int(round(x, 0)) for x in cumulative_hospitalized]
-        
+
         cumulative_hospitalized <- .Object@x_sol_final[[12]] #TH
         cumulative_hospitalized <- as.integer(cumulative_hospitalized)
         
-        
-        #total_detected_deaths = object@x_sol_final[15, :]  # DD
-        #total_detected_deaths = [int(round(x, 0)) for x in total_detected_deaths]
-        
+
         total_detected_deaths <- .Object@x_sol_final[[15]] #TH
         total_detected_deaths <- as.integer(total_detected_deaths)
-        
-        
-        
-        #active_ventilated = (
-        #  object@x_sol_final[13, :] + object@x_sol_final[14, :]
-        #)  # DVR + DVD
-        #active_ventilated = [int(round(x, 0)) for x in active_ventilated]
-        
         
         active_ventilated <- .Object@x_sol_final[[13]] + .Object@x_sol_final[[14]] # DVR + DVD
         active_ventilated <- as.integer(active_ventilated)
@@ -202,12 +178,6 @@ setMethod("create_datasets_predictions", "DELPHIDataCreator",function(.Object, .
           
         )
         
-        # Generation of the dataframe from the day since 100th case
-        #all_dates_since_100 = [
-        #  str((object@date_day_since100 + timedelta(days=i)).date())
-        #  for i in range(object@x_sol_final.shape[1])
-        #  ]
-        
         
         all_dates_since_100 <- c()
         start_date <- as.date(.Object@date_day_since100)
@@ -220,9 +190,9 @@ setMethod("create_datasets_predictions", "DELPHIDataCreator",function(.Object, .
         }
         
         df_predictions_since_100_cont_country_prov <- data.frame(
-            "Continent" = rep(.Object@continent, length(all_dates_since_100)) , #[object@continent for _ in range(len(all_dates_since_100))],
-            "Country"= rep(.Object@country, length(all_dates_since_100)), #[object@country for _ in range(len(all_dates_since_100))],
-            "Province"=rep(.Object@province,  length(all_dates_since_100)), #[object@province for _ in range(len(all_dates_since_100))],
+            "Continent" = rep(.Object@continent, length(all_dates_since_100)) , 
+            "Country"= rep(.Object@country, length(all_dates_since_100)), 
+            "Province"=rep(.Object@province,  length(all_dates_since_100)), 
             "Day"= all_dates_since_100,
             "Total Detected"= total_detected,
             "Active"= active_cases,
@@ -264,9 +234,9 @@ setMethod("create_datasets_raw", "DELPHIDataCreator",
     
     df_predictions_since_today_cont_country_prov <- data.frame(
     
-        "Continent" = .Object@continent, #[object@continent for _ in range(n_days_since_today)],
-        "Country"= .Object@country, #[object@country for _ in range(n_days_since_today)],
-        "Province"= .Object@province, # [object@province for _ in range(n_days_since_today)],
+        "Continent" = .Object@continent, 
+        "Country"= .Object@country, 
+        "Province"= .Object@province, 
         "Day"= all_dates_since_today
     )
     
@@ -278,18 +248,8 @@ setMethod("create_datasets_raw", "DELPHIDataCreator",
       "DQD",      "R",      "D",      "TH",      "DVR",
       "DVD",      "DD",      "DT")
     
-    #df_predictions_since_today_cont_country_prov = pd.concat(
-    #  [df_predictions_since_today_cont_country_prov, intr_since_today], axis=1
-    #)
     
     df_predictions_since_today_cont_country_prov <- bind_cols(df_predictions_since_today_cont_country_prov, intr_since_today)
-    
-    
-    # Generation of the dataframe from the day since 100th case
-    #all_dates_since_100 = [
-    #  str((object@date_day_since100 + timedelta(days=i)).date())
-    #  for i in range(object@x_sol_final.shape[1])
-    #  ]
     
     all_dates_since_100 <- c()
     start_date <- as.date(.Object@date_day_since100)
@@ -301,29 +261,21 @@ setMethod("create_datasets_raw", "DELPHIDataCreator",
       all_dates_since_100 <- c(all_dates_since_100, toString(temp_date))
     }
     
-    
-    
     df_predictions_since_100_cont_country_prov <- pd.DataFrame(
-        "Continent"= rep(.Object@continent,  length(all_dates_since_100)), # [object@continent for _ in range(len(all_dates_since_100))],
-        "Country"= rep(.Object@country,  length(all_dates_since_100)) , #: [object@country for _ in range(len(all_dates_since_100))],
-        "Province"= rep(.Object@province,  length(all_dates_since_100)), #: [object@province for _ in range(len(all_dates_since_100))],
+        "Continent"= rep(.Object@continent,  length(all_dates_since_100)), 
+        "Country"= rep(.Object@country,  length(all_dates_since_100)) , 
+        "Province"= rep(.Object@province,  length(all_dates_since_100)), 
         "Day": rep(all_dates_since_100,   length(all_dates_since_100))
     )
     
-    #intr_since_100 = pd.DataFrame(object@x_sol_final.transpose())
     intr_since_100 <- data.frame(transpose(.Object@sol_final))
     
     colnames(intr_since_100) <-  c("S",   "E",    "I",   "AR",
       "DHR",  "DQR",    "AD",   "DHD",    "DQD",    "R",    "D",
       "TH",    "DVR",    "DVD",    "DD",    "DT")
     
-    #df_predictions_since_100_cont_country_prov = pd.concat(
-    #  [df_predictions_since_100_cont_country_prov, intr_since_100], axis=1
-    #)
-    
     df_predictions_since_100_cont_country_prov <- bind_cols(df_predictions_since_100_cont_country_prov, 
                                                             intr_since_100)
-    
     return(list (
       df_predictions_since_today_cont_country_prov,
       df_predictions_since_100_cont_country_prov
@@ -341,7 +293,7 @@ setGeneric(name="create_datasets_with_confidence_intervals",
            }
 )
 
-setMethod("create_datasets_with_confidence_intervals", "DELPHIDataCreator",
+setMethod("create_datasets_with_confidence_intervals", "CapstoneDataCREATOR",
           function(.Object, 
               cases_data_fit, #: list,
               deaths_data_fit, #: list,
@@ -683,11 +635,10 @@ setGeneric(name="create_datasets_predictions_scenario",
 )
 
 
-setMethod("create_datasets_predictions_scenario", "DELPHIDataCreator",
+setMethod("create_datasets_predictions_scenario", "CapstoneDataCREATOR",
           function(.Object, policy = "Lockdown", time =  0, totalcases=NaN, ...   )
 {
-      n_days_btw_today_since_100 <- #( Sys.Date()  - as.Date(object@date_day_since100).days
-        as.numeric(difftime(Sys.Date()  , as.Date(.Object@date_day_since100), units = "days"))
+      n_days_btw_today_since_100 <-  as.numeric(difftime(Sys.Date()  , as.Date(.Object@date_day_since100), units = "days"))
       #n_days_since_today = self.x_sol_final.shape[1] - n_days_btw_today_since_100
       n_days_since_today <- as.numeric(difftime(.Object@x_sol_final[[2]]  , n_days_btw_today_since_100, units = "days"))
       #all_dates_since_today = [
@@ -1465,7 +1416,7 @@ DELPHIBacktest <- setClass(
   
 )
 
-validDELPHIBacktestObject <- function(.Object) 
+validDELPHIBacktestObject <- function(object) 
 {
   #historical_data_path
   TRUE

@@ -205,7 +205,7 @@ get_bounds_params_from_pastparams <- function(
   
   }
     else {
-      stop(paste("Optimizer ", optimizer, " not supported in this implementation so can't generate bounds"))
+      stop(paste("Optimizer ", optimizer, " not supported in this implementation so can't generate bounds", sep = ""))
     }
     
     #bounds_params = [(lower, upper) for lower, upper in zip(param_list_lower, param_list_upper)]
@@ -255,9 +255,9 @@ check_us_policy_data_consistency <- function(policies, df_policy_raw_us)
     #), stop("Problem in data, policy {policy} has no start date but has an end date")
     
     if (!is.null( df_policy_raw_us[paste(policy, "_end_date")] & 
-                                   is.null( df_policy_raw_us[paste(policy, "_start_date")])  ))  
+                                   is.null( df_policy_raw_us[paste(policy, "_start_date", sep = "")])  ))  
         
-      stop(paste("Problem in data, policy ", policy, " has no start date but has an end date"))
+      stop(paste("Problem in data, policy ", policy, " has no start date but has an end date", sep = ""))
     
   }
 
@@ -517,11 +517,11 @@ read_policy_data_us_only <- function(filepath_data_sandbox)
     for (location in unique(df$location_name$location_name))
     {
       
-      print(paste("location is " , location))
+      print(paste("location is " , location, sep = ""))
       if (location %in% list_US_states) 
       {
         df_location <- df %>% filter(location_name$location_name == location)
-        print(paste("breaking after first location ", location))
+        print(paste("breaking after first location ", location, sep = ""))
         for (policy in policies) 
         {
           #print(paste("location is ", location))
