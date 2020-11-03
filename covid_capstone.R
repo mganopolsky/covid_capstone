@@ -54,8 +54,8 @@ library(trust)
 #file_name <- paste(dir, "covid_19_clean_complete.csv", sep = "/")
 #all_data <- read_csv(file_name)
 
-source("params.r")
-source("capstone_utils.R")
+#source("params.r")
+#source("capstone_utils.R")
 source("covid_classes.R")
 
 
